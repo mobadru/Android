@@ -86,9 +86,9 @@ public class activity_tenant_dashboard extends AppCompatActivity {
 
     private void openMaintenance() {
         Toast.makeText(this, "Opening Maintenance Requests...", Toast.LENGTH_SHORT).show();
-        // Intent intent = new Intent(this, MaintenanceActivity.class);
-        // intent.putExtra("tenantId", tenantId);
-        // startActivity(intent);
+        Intent intent = new Intent(this, MaintenanceManagementActivity.class);
+        intent.putExtra("tenantId", tenantId);
+        startActivity(intent);
     }
 
     private void openMessages() {

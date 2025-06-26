@@ -51,6 +51,15 @@ public class DatabaseHelper extends SQLiteOpenHelper {
     public static final String COL_PAYMENT_AMOUNT = "amount";
     public static final String COL_PAYMENT_DATE = "payment_date";
 
+
+    // MAINTENANCE REPORTS TABLE
+    public static final String TABLE_MAINTENANCE = "maintenance_reports";
+    public static final String COL_MAINTENANCE_ID = "id";
+    public static final String COL_MAINTENANCE_USER_ID = "user_id";
+    public static final String COL_MAINTENANCE_ROOM_ID = "room_id";
+    public static final String COL_MAINTENANCE_DESC = "description";
+    public static final String COL_MAINTENANCE_STATUS = "status";
+    public static final String COL_MAINTENANCE_DATE = "date_reported";
     public DatabaseHelper(Context context) {
         super(context, DATABASE_NAME, null, DATABASE_VERSION);
     }
@@ -98,6 +107,18 @@ public class DatabaseHelper extends SQLiteOpenHelper {
                 "FOREIGN KEY(" + COL_PAYMENT_LEASE_ID + ") REFERENCES " + TABLE_LEASE + "(" + COL_LEASE_ID + "))";
         db.execSQL(createPaymentsTable);
 
+        // Maintenance Reports Table
+        db.execSQL("CREATE TABLE " + TABLE_MAINTENANCE + " (" +
+                COL_MAINTENANCE_ID + " INTEGER PRIMARY KEY AUTOINCREMENT, " +
+                COL_MAINTENANCE_USER_ID + " INTEGER, " +
+                COL_MAINTENANCE_ROOM_ID + " INTEGER, " +
+                COL_MAINTENANCE_DESC + " TEXT, " +
+                COL_MAINTENANCE_STATUS + " TEXT DEFAULT 'Pending', " +
+                COL_MAINTENANCE_DATE + " TEXT, " +
+                "FOREIGN KEY(" + COL_MAINTENANCE_USER_ID + ") REFERENCES " + TABLE_USERS + "(" + COL_ID + "), " +
+                "FOREIGN KEY(" + COL_MAINTENANCE_ROOM_ID + ") REFERENCES " + TABLE_ROOMS + "(" + COL_ROOM_ID + "))");
+
+
         // Insert default admin user
         ContentValues adminValues = new ContentValues();
         adminValues.put(COL_NAME, "Admin");
@@ -112,6 +133,7 @@ public class DatabaseHelper extends SQLiteOpenHelper {
         db.execSQL("DROP TABLE IF EXISTS " + TABLE_PAYMENTS);
         db.execSQL("DROP TABLE IF EXISTS " + TABLE_LEASE);
         db.execSQL("DROP TABLE IF EXISTS " + TABLE_ROOMS);
+        db.execSQL("DROP TABLE IF EXISTS " + TABLE_MAINTENANCE);
         db.execSQL("DROP TABLE IF EXISTS " + TABLE_USERS);
         onCreate(db);
     }
@@ -335,7 +357,7 @@ public class DatabaseHelper extends SQLiteOpenHelper {
         SQLiteDatabase db = this.getReadableDatabase();
 
         String query = "SELECT l." + COL_LEASE_ID + ", u." + COL_NAME + " AS userName, r." + COL_ROOM_NUMBER + " AS roomNumber, r." + COL_RENT_AMOUNT + ", " +
-                "l." + COL_LEASE_START + ", l." + COL_LEASE_END + " " +
+                "l." + COL_LEASE_START + ", l." + COL_LEASE_END + ", r." + COL_ROOM_ID + " " +   // add roomId here
                 "FROM " + TABLE_LEASE + " l " +
                 "JOIN " + TABLE_USERS + " u ON l." + COL_LEASE_USER_ID + " = u." + COL_ID + " " +
                 "JOIN " + TABLE_ROOMS + " r ON l." + COL_LEASE_ROOM_ID + " = r." + COL_ROOM_ID + " " +
@@ -351,8 +373,8 @@ public class DatabaseHelper extends SQLiteOpenHelper {
                 double rentAmount = cursor.getDouble(cursor.getColumnIndexOrThrow(COL_RENT_AMOUNT));
                 String leaseStart = cursor.getString(cursor.getColumnIndexOrThrow(COL_LEASE_START));
                 String leaseEnd = cursor.getString(cursor.getColumnIndexOrThrow(COL_LEASE_END));
-
-                leaseDetailsList.add(new LeaseDetails(leaseId, userName, roomNumber, rentAmount, leaseStart, leaseEnd));
+                int roomId = cursor.getInt(cursor.getColumnIndexOrThrow(COL_ROOM_ID));
+                leaseDetailsList.add(new LeaseDetails(leaseId, userName, roomNumber, rentAmount, leaseStart, leaseEnd, roomId));
             } while (cursor.moveToNext());
         }
         cursor.close();
@@ -368,5 +390,50 @@ public class DatabaseHelper extends SQLiteOpenHelper {
         int rows = db.update(TABLE_LEASE, values, COL_LEASE_ID + "=?", new String[]{String.valueOf(leaseId)});
         db.close();
         return rows > 0;
+    }
+
+
+
+    // Insert maintenance report
+    public boolean insertMaintenanceRequest(int userId, int roomId, String description, String dateReported) {
+        SQLiteDatabase db = this.getWritableDatabase();
+        ContentValues values = new ContentValues();
+        values.put(COL_MAINTENANCE_USER_ID, userId);
+        values.put(COL_MAINTENANCE_ROOM_ID, roomId);
+        values.put(COL_MAINTENANCE_DESC, description);
+        values.put(COL_MAINTENANCE_DATE, dateReported);
+        values.put(COL_MAINTENANCE_STATUS, "Pending");
+        long result = db.insert(TABLE_MAINTENANCE, null, values);
+        db.close();
+        return result != -1;
+    }
+
+    // Get all maintenance reports (for admin)
+    public List<MaintenanceReport> getAllMaintenanceReports() {
+        List<MaintenanceReport> list = new ArrayList<>();
+        SQLiteDatabase db = this.getReadableDatabase();
+        String query = "SELECT m." + COL_MAINTENANCE_ID + ", u." + COL_NAME + ", r." + COL_ROOM_NUMBER + ", " +
+                "m." + COL_MAINTENANCE_DESC + ", m." + COL_MAINTENANCE_STATUS + ", m." + COL_MAINTENANCE_DATE +
+                " FROM " + TABLE_MAINTENANCE + " m " +
+                "JOIN " + TABLE_USERS + " u ON m." + COL_MAINTENANCE_USER_ID + " = u." + COL_ID + " " +
+                "JOIN " + TABLE_ROOMS + " r ON m." + COL_MAINTENANCE_ROOM_ID + " = r." + COL_ROOM_ID +
+                " ORDER BY m." + COL_MAINTENANCE_DATE + " DESC";
+        Cursor cursor = db.rawQuery(query, null);
+
+        if (cursor.moveToFirst()) {
+            do {
+                int id = cursor.getInt(0);
+                String tenantName = cursor.getString(1);
+                String roomNumber = cursor.getString(2);
+                String description = cursor.getString(3);
+                String status = cursor.getString(4);
+                String date = cursor.getString(5);
+                list.add(new MaintenanceReport(id, tenantName, roomNumber, description, status, date));
+            } while (cursor.moveToNext());
+        }
+
+        cursor.close();
+        db.close();
+        return list;
     }
 }

@@ -1,10 +1,10 @@
 package com.example.semproject;
 
+import android.content.ContentValues;
 import android.content.Context;
+import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteOpenHelper;
-import android.content.ContentValues;
-import android.database.Cursor;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -43,12 +43,21 @@ public class DatabaseHelper extends SQLiteOpenHelper {
     public static final String COL_LEASE_START = "lease_start";
     public static final String COL_LEASE_END = "lease_end";
 
+    // PAYMENTS TABLE
+    public static final String TABLE_PAYMENTS = "payments";
+    public static final String COL_PAYMENT_ID = "id";
+    public static final String COL_PAYMENT_USER_ID = "user_id";
+    public static final String COL_PAYMENT_LEASE_ID = "lease_id";
+    public static final String COL_PAYMENT_AMOUNT = "amount";
+    public static final String COL_PAYMENT_DATE = "payment_date";
+
     public DatabaseHelper(Context context) {
         super(context, DATABASE_NAME, null, DATABASE_VERSION);
     }
 
     @Override
     public void onCreate(SQLiteDatabase db) {
+        // Create Users Table
         String createUsersTable = "CREATE TABLE " + TABLE_USERS + " (" +
                 COL_ID + " INTEGER PRIMARY KEY AUTOINCREMENT, " +
                 COL_NAME + " TEXT NOT NULL, " +
@@ -57,6 +66,7 @@ public class DatabaseHelper extends SQLiteOpenHelper {
                 COL_ROLE + " TEXT NOT NULL)";
         db.execSQL(createUsersTable);
 
+        // Create Rooms Table
         String createRoomsTable = "CREATE TABLE " + TABLE_ROOMS + " (" +
                 COL_ROOM_ID + " INTEGER PRIMARY KEY AUTOINCREMENT, " +
                 COL_ROOM_NUMBER + " TEXT NOT NULL, " +
@@ -66,6 +76,7 @@ public class DatabaseHelper extends SQLiteOpenHelper {
                 COL_STATUS + " TEXT NOT NULL)";
         db.execSQL(createRoomsTable);
 
+        // Create Lease Agreement Table
         String createLeaseTable = "CREATE TABLE " + TABLE_LEASE + " (" +
                 COL_LEASE_ID + " INTEGER PRIMARY KEY AUTOINCREMENT, " +
                 COL_LEASE_USER_ID + " INTEGER NOT NULL, " +
@@ -76,21 +87,58 @@ public class DatabaseHelper extends SQLiteOpenHelper {
                 "FOREIGN KEY(" + COL_LEASE_ROOM_ID + ") REFERENCES " + TABLE_ROOMS + "(" + COL_ROOM_ID + "))";
         db.execSQL(createLeaseTable);
 
-        // Insert default admin
+        // Create Payments Table
+        String createPaymentsTable = "CREATE TABLE " + TABLE_PAYMENTS + " (" +
+                COL_PAYMENT_ID + " INTEGER PRIMARY KEY AUTOINCREMENT, " +
+                COL_PAYMENT_USER_ID + " INTEGER NOT NULL, " +
+                COL_PAYMENT_LEASE_ID + " INTEGER NOT NULL, " +
+                COL_PAYMENT_AMOUNT + " REAL NOT NULL, " +
+                COL_PAYMENT_DATE + " TEXT NOT NULL, " +
+                "FOREIGN KEY(" + COL_PAYMENT_USER_ID + ") REFERENCES " + TABLE_USERS + "(" + COL_ID + "), " +
+                "FOREIGN KEY(" + COL_PAYMENT_LEASE_ID + ") REFERENCES " + TABLE_LEASE + "(" + COL_LEASE_ID + "))";
+        db.execSQL(createPaymentsTable);
+
+        // Insert default admin user
         ContentValues adminValues = new ContentValues();
         adminValues.put(COL_NAME, "Admin");
         adminValues.put(COL_EMAIL, "admin@gmail.com");
-        adminValues.put(COL_PASSWORD, "123");
+        adminValues.put(COL_PASSWORD, "123"); // NOTE: For security consider hashing passwords!
         adminValues.put(COL_ROLE, ROLE_ADMIN);
         db.insert(TABLE_USERS, null, adminValues);
     }
 
     @Override
     public void onUpgrade(SQLiteDatabase db, int oldVersion, int newVersion) {
+        db.execSQL("DROP TABLE IF EXISTS " + TABLE_PAYMENTS);
         db.execSQL("DROP TABLE IF EXISTS " + TABLE_LEASE);
         db.execSQL("DROP TABLE IF EXISTS " + TABLE_ROOMS);
         db.execSQL("DROP TABLE IF EXISTS " + TABLE_USERS);
         onCreate(db);
+    }
+
+    // ----------- PAYMENT INSERTION --------------
+
+    /**
+     * Inserts a payment record into the payments table.
+     *
+     * @param userId      tenant/user ID making the payment
+     * @param leaseId     lease agreement ID linked to the payment
+     * @param amount      payment amount (as double)
+     * @param paymentDate payment date in "yyyy-MM-dd" format
+     * @return true if insertion was successful, false otherwise
+     */
+    public boolean insertPayment(int userId, int leaseId, double amount, String paymentDate) {
+        SQLiteDatabase db = this.getWritableDatabase();
+
+        ContentValues values = new ContentValues();
+        values.put(COL_PAYMENT_USER_ID, userId);
+        values.put(COL_PAYMENT_LEASE_ID, leaseId);
+        values.put(COL_PAYMENT_AMOUNT, amount);
+        values.put(COL_PAYMENT_DATE, paymentDate);
+
+        long result = db.insert(TABLE_PAYMENTS, null, values);
+        db.close();
+        return result != -1;
     }
 
     // ------------------ USER CRUD ------------------
@@ -101,9 +149,37 @@ public class DatabaseHelper extends SQLiteOpenHelper {
         values.put(COL_NAME, name);
         values.put(COL_EMAIL, email);
         values.put(COL_PASSWORD, password);
-        values.put(COL_ROLE, role == null || role.trim().isEmpty() ? ROLE_TENANT : role);
+        values.put(COL_ROLE, (role == null || role.trim().isEmpty()) ? ROLE_TENANT : role);
         long result = db.insert(TABLE_USERS, null, values);
+        db.close();
         return result != -1;
+    }
+
+    public List<Payment> getPaymentsByUserId(int userId) {
+        List<Payment> paymentList = new ArrayList<>();
+        SQLiteDatabase db = this.getReadableDatabase();
+
+        Cursor cursor = db.rawQuery(
+                "SELECT " + COL_PAYMENT_ID + ", " + COL_PAYMENT_USER_ID + ", " + COL_PAYMENT_LEASE_ID + ", " + COL_PAYMENT_AMOUNT + ", " + COL_PAYMENT_DATE +
+                        " FROM " + TABLE_PAYMENTS + " WHERE " + COL_PAYMENT_USER_ID + " = ?",
+                new String[]{String.valueOf(userId)});
+
+        if (cursor.moveToFirst()) {
+            do {
+                int paymentId = cursor.getInt(cursor.getColumnIndexOrThrow(COL_PAYMENT_ID));
+                int uid = cursor.getInt(cursor.getColumnIndexOrThrow(COL_PAYMENT_USER_ID));
+                int leaseId = cursor.getInt(cursor.getColumnIndexOrThrow(COL_PAYMENT_LEASE_ID));
+                double amount = cursor.getDouble(cursor.getColumnIndexOrThrow(COL_PAYMENT_AMOUNT));
+                String paymentDate = cursor.getString(cursor.getColumnIndexOrThrow(COL_PAYMENT_DATE));
+
+                paymentList.add(new Payment(paymentId, uid, leaseId, amount, paymentDate));
+            } while (cursor.moveToNext());
+        }
+
+        cursor.close();
+        db.close();
+
+        return paymentList;
     }
 
     public boolean insertUserAutoRole(String name, String email, String password) {
@@ -116,6 +192,7 @@ public class DatabaseHelper extends SQLiteOpenHelper {
             }
         }
         cursor.close();
+        db.close();
         return insertUser(name, email, password, role);
     }
 
@@ -162,12 +239,14 @@ public class DatabaseHelper extends SQLiteOpenHelper {
         values.put(COL_PASSWORD, password);
         values.put(COL_ROLE, role);
         int rows = db.update(TABLE_USERS, values, COL_ID + "=?", new String[]{String.valueOf(id)});
+        db.close();
         return rows > 0;
     }
 
     public boolean deleteUser(int id) {
         SQLiteDatabase db = this.getWritableDatabase();
         int rows = db.delete(TABLE_USERS, COL_ID + "=?", new String[]{String.valueOf(id)});
+        db.close();
         return rows > 0;
     }
 
@@ -182,6 +261,7 @@ public class DatabaseHelper extends SQLiteOpenHelper {
         values.put(COL_RENT_AMOUNT, rentAmount);
         values.put(COL_STATUS, status);
         long result = db.insert(TABLE_ROOMS, null, values);
+        db.close();
         return result != -1;
     }
 
@@ -214,12 +294,14 @@ public class DatabaseHelper extends SQLiteOpenHelper {
         values.put(COL_RENT_AMOUNT, rentAmount);
         values.put(COL_STATUS, status);
         int rows = db.update(TABLE_ROOMS, values, COL_ROOM_ID + "=?", new String[]{String.valueOf(id)});
+        db.close();
         return rows > 0;
     }
 
     public boolean deleteRoom(int id) {
         SQLiteDatabase db = this.getWritableDatabase();
         int rows = db.delete(TABLE_ROOMS, COL_ROOM_ID + "=?", new String[]{String.valueOf(id)});
+        db.close();
         return rows > 0;
     }
 
@@ -234,23 +316,26 @@ public class DatabaseHelper extends SQLiteOpenHelper {
         values.put(COL_LEASE_END, leaseEnd);
         long result = db.insert(TABLE_LEASE, null, values);
         if (result != -1) {
+            // Mark room as leased
             ContentValues roomUpdate = new ContentValues();
             roomUpdate.put(COL_STATUS, "Leased");
             db.update(TABLE_ROOMS, roomUpdate, COL_ROOM_ID + "=?", new String[]{String.valueOf(roomId)});
+            db.close();
             return true;
         }
+        db.close();
         return false;
     }
 
-    // Get all lease details including rent amount
-
-    // Get lease details filtered by a specific userId (e.g., logged in user)
+    /**
+     * Get lease details for a given user.
+     */
     public List<LeaseDetails> getLeaseDetailsByUserId(int userId) {
         List<LeaseDetails> leaseDetailsList = new ArrayList<>();
         SQLiteDatabase db = this.getReadableDatabase();
 
-        String query = "SELECT l.id, u.name AS userName, r.room_number AS roomNumber, r.rent_amount, " +
-                "l.lease_start, l.lease_end " +
+        String query = "SELECT l." + COL_LEASE_ID + ", u." + COL_NAME + " AS userName, r." + COL_ROOM_NUMBER + " AS roomNumber, r." + COL_RENT_AMOUNT + ", " +
+                "l." + COL_LEASE_START + ", l." + COL_LEASE_END + " " +
                 "FROM " + TABLE_LEASE + " l " +
                 "JOIN " + TABLE_USERS + " u ON l." + COL_LEASE_USER_ID + " = u." + COL_ID + " " +
                 "JOIN " + TABLE_ROOMS + " r ON l." + COL_LEASE_ROOM_ID + " = r." + COL_ROOM_ID + " " +
@@ -260,58 +345,28 @@ public class DatabaseHelper extends SQLiteOpenHelper {
 
         if (cursor.moveToFirst()) {
             do {
-                int leaseId = cursor.getInt(cursor.getColumnIndexOrThrow("id"));
+                int leaseId = cursor.getInt(cursor.getColumnIndexOrThrow(COL_LEASE_ID));
                 String userName = cursor.getString(cursor.getColumnIndexOrThrow("userName"));
                 String roomNumber = cursor.getString(cursor.getColumnIndexOrThrow("roomNumber"));
-                double rentAmount = cursor.getDouble(cursor.getColumnIndexOrThrow("rent_amount"));
-                String leaseStart = cursor.getString(cursor.getColumnIndexOrThrow("lease_start"));
-                String leaseEnd = cursor.getString(cursor.getColumnIndexOrThrow("lease_end"));
+                double rentAmount = cursor.getDouble(cursor.getColumnIndexOrThrow(COL_RENT_AMOUNT));
+                String leaseStart = cursor.getString(cursor.getColumnIndexOrThrow(COL_LEASE_START));
+                String leaseEnd = cursor.getString(cursor.getColumnIndexOrThrow(COL_LEASE_END));
 
                 leaseDetailsList.add(new LeaseDetails(leaseId, userName, roomNumber, rentAmount, leaseStart, leaseEnd));
             } while (cursor.moveToNext());
         }
-
         cursor.close();
         db.close();
         return leaseDetailsList;
     }
 
-
-    // Add this method to update lease start and end dates
     public boolean updateLeaseDates(int leaseId, String newStart, String newEnd) {
         SQLiteDatabase db = this.getWritableDatabase();
         ContentValues values = new ContentValues();
         values.put(COL_LEASE_START, newStart);
         values.put(COL_LEASE_END, newEnd);
         int rows = db.update(TABLE_LEASE, values, COL_LEASE_ID + "=?", new String[]{String.valueOf(leaseId)});
+        db.close();
         return rows > 0;
     }
-
-    // Add this method to insert a payment record
-// Note: You need to add a payments table in your DB schema for this to work properly.
-    public boolean insertPayment(int userId, int leaseId, String amount, String paymentDate) {
-        SQLiteDatabase db = this.getWritableDatabase();
-
-        // Create payments table if it does not exist yet
-        String createPaymentsTable = "CREATE TABLE IF NOT EXISTS payments (" +
-                "id INTEGER PRIMARY KEY AUTOINCREMENT, " +
-                "user_id INTEGER NOT NULL, " +
-                "lease_id INTEGER NOT NULL, " +
-                "amount TEXT NOT NULL, " +
-                "payment_date TEXT NOT NULL, " +
-                "FOREIGN KEY(user_id) REFERENCES " + TABLE_USERS + "(" + COL_ID + "), " +
-                "FOREIGN KEY(lease_id) REFERENCES " + TABLE_LEASE + "(" + COL_LEASE_ID + "))";
-        db.execSQL(createPaymentsTable);
-
-        ContentValues values = new ContentValues();
-        values.put("user_id", userId);
-        values.put("lease_id", leaseId);
-        values.put("amount", amount);
-        values.put("payment_date", paymentDate);
-
-        long result = db.insert("payments", null, values);
-        return result != -1;
-    }
-
-
 }

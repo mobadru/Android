@@ -79,9 +79,9 @@ public class activity_tenant_dashboard extends AppCompatActivity {
 
     private void openPayments() {
         Toast.makeText(this, "Opening Payments...", Toast.LENGTH_SHORT).show();
-        // Intent intent = new Intent(this, PaymentsActivity.class);
-        // intent.putExtra("tenantId", tenantId);
-        // startActivity(intent);
+        Intent intent = new Intent(this, PaymentsActivity.class);
+        intent.putExtra("tenantId", tenantId);
+        startActivity(intent);
     }
 
     private void openMaintenance() {

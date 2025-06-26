@@ -32,6 +32,7 @@ public class LeaseAgreementsActivity extends AppCompatActivity {
         EdgeToEdge.enable(this);
         setContentView(R.layout.activity_lease_agreements);
 
+        // Handle window insets for padding
         ViewCompat.setOnApplyWindowInsetsListener(findViewById(R.id.main), (v, insets) -> {
             Insets systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars());
             v.setPadding(systemBars.left, systemBars.top, systemBars.right, systemBars.bottom);
@@ -73,55 +74,32 @@ public class LeaseAgreementsActivity extends AppCompatActivity {
             Button btnUpdate = roomCard.findViewById(R.id.btnUpdateLease);
             Button btnMakePayment = roomCard.findViewById(R.id.btnMakePayment);
 
-            // Set read-only text
             tvRoomName.setText(lease.getRoomNumber());
-            tvPrice.setText(String.format(Locale.US, "$%.2f", lease.getRentAmount()));
+            tvPrice.setText(String.format(Locale.US, "TZS : %.2f", lease.getRentAmount()));
             tvStartDate.setText(lease.getLeaseStart());
             tvEndDate.setText(lease.getLeaseEnd());
-            tvStartDate.setFocusable(false);
-            tvStartDate.setClickable(false);
-            tvEndDate.setFocusable(false);
-            tvEndDate.setClickable(false);
 
-            // Duration and Total cost
             int months = calculateMonthsBetween(lease.getLeaseStart(), lease.getLeaseEnd());
             tvDuration.setText(String.valueOf(months));
+
             double totalCost = months * lease.getRentAmount();
-            tvTotalCost.setText(String.format(Locale.US, "$%.2f", totalCost));
+            tvTotalCost.setText(String.format(Locale.US, "TZS : %.2f", totalCost));
 
-            btnUpdate.setOnClickListener(v -> {
-                // Optional: You can re-enable date picking here if you want to allow changes during update
-                tvStartDate.setClickable(true);
-                tvEndDate.setClickable(true);
-
-                tvStartDate.setOnClickListener(v2 -> showDatePicker(tvStartDate));
-                tvEndDate.setOnClickListener(v2 -> showDatePicker(tvEndDate));
-
-                String newStart = tvStartDate.getText().toString();
-                String newEnd = tvEndDate.getText().toString();
-
-                if (isDateValid(newStart, newEnd)) {
-                    boolean success = db.updateLeaseDates(lease.getLeaseId(), newStart, newEnd);
-                    if (success) {
-                        Toast.makeText(this, "Lease updated!", Toast.LENGTH_SHORT).show();
-                        int newMonths = calculateMonthsBetween(newStart, newEnd);
-                        tvDuration.setText(String.valueOf(newMonths));
-                        double newTotalCost = newMonths * lease.getRentAmount();
-                        tvTotalCost.setText(String.format(Locale.US, "$%.2f", newTotalCost));
-                    } else {
-                        Toast.makeText(this, "Update failed", Toast.LENGTH_SHORT).show();
-                    }
-                } else {
-                    Toast.makeText(this, "Invalid dates", Toast.LENGTH_SHORT).show();
-                }
-
-                // Disable date pickers again after update
-                tvStartDate.setClickable(false);
-                tvEndDate.setClickable(false);
-            });
+            btnUpdate.setOnClickListener(v -> showUpdateDialog(lease, db));
 
             btnMakePayment.setOnClickListener(v -> {
                 String totalCostStr = tvTotalCost.getText().toString();
+
+                // Extract numeric value from the string, e.g., "TZS : 10000.00" -> "10000.00"
+                String numericPart = totalCostStr.replaceAll("[^\\d.]+", "");
+                double totalCostDouble;
+
+                try {
+                    totalCostDouble = Double.parseDouble(numericPart);
+                } catch (NumberFormatException e) {
+                    Toast.makeText(this, "Invalid payment amount", Toast.LENGTH_SHORT).show();
+                    return;
+                }
 
                 new androidx.appcompat.app.AlertDialog.Builder(this)
                         .setTitle("Confirm Payment")
@@ -130,7 +108,7 @@ public class LeaseAgreementsActivity extends AppCompatActivity {
                             boolean paymentSuccess = db.insertPayment(
                                     tenantId,
                                     lease.getLeaseId(),
-                                    totalCostStr,
+                                    totalCostDouble,
                                     dateFormat.format(Calendar.getInstance().getTime())
                             );
 
@@ -148,12 +126,82 @@ public class LeaseAgreementsActivity extends AppCompatActivity {
         }
     }
 
-    private void showDatePicker(TextView tvStartDate) {
+    private void showUpdateDialog(LeaseDetails lease, DatabaseHelper db) {
+        View dialogView = getLayoutInflater().inflate(R.layout.dialog_update_lease, null);
+        TextView tvDialogStartDate = dialogView.findViewById(R.id.tvDialogStartDate);
+        TextView tvDialogEndDate = dialogView.findViewById(R.id.tvDialogEndDate);
+        TextView tvDialogTotalPrice = dialogView.findViewById(R.id.tvDialogTotalPrice);
+
+        tvDialogStartDate.setText(lease.getLeaseStart());
+        tvDialogEndDate.setText(lease.getLeaseEnd());
+
+        final String[] startDate = {lease.getLeaseStart()};
+        final String[] endDate = {lease.getLeaseEnd()};
+
+        tvDialogStartDate.setOnClickListener(v -> showDatePickerDialog(date -> {
+            startDate[0] = date;
+            tvDialogStartDate.setText(date);
+            updateTotal(tvDialogTotalPrice, startDate[0], endDate[0], lease.getRentAmount());
+        }));
+
+        tvDialogEndDate.setOnClickListener(v -> showDatePickerDialog(date -> {
+            endDate[0] = date;
+            tvDialogEndDate.setText(date);
+            updateTotal(tvDialogTotalPrice, startDate[0], endDate[0], lease.getRentAmount());
+        }));
+
+        updateTotal(tvDialogTotalPrice, startDate[0], endDate[0], lease.getRentAmount());
+
+        new androidx.appcompat.app.AlertDialog.Builder(this)
+                .setTitle("Update Lease Dates")
+                .setView(dialogView)
+                .setPositiveButton("Update", (dialog, which) -> {
+                    if (!isDateValid(startDate[0], endDate[0])) {
+                        Toast.makeText(this, "Invalid date range", Toast.LENGTH_SHORT).show();
+                        return;
+                    }
+
+                    boolean updated = db.updateLeaseDates(lease.getLeaseId(), startDate[0], endDate[0]);
+                    if (updated) {
+                        Toast.makeText(this, "Lease updated successfully", Toast.LENGTH_SHORT).show();
+                        loadLeasedRooms();
+                    } else {
+                        Toast.makeText(this, "Failed to update lease", Toast.LENGTH_SHORT).show();
+                    }
+                })
+                .setNegativeButton("Cancel", null)
+                .show();
     }
 
+    private void updateTotal(TextView tvTotal, String start, String end, double rentAmount) {
+        int months = calculateMonthsBetween(start, end);
+        double total = months * rentAmount;
+        tvTotal.setText(String.format(Locale.US, "TZS : %.2f", total));
+    }
+
+    private interface DateCallback {
+        void onDatePicked(String date);
+    }
+
+    private void showDatePickerDialog(DateCallback callback) {
+        final Calendar calendar = Calendar.getInstance();
+        new DatePickerDialog(this, (view, year, month, dayOfMonth) -> {
+            calendar.set(year, month, dayOfMonth);
+            String date = dateFormat.format(calendar.getTime());
+            callback.onDatePicked(date);
+        }, calendar.get(Calendar.YEAR), calendar.get(Calendar.MONTH), calendar.get(Calendar.DAY_OF_MONTH)).show();
+    }
 
     private boolean isDateValid(String start, String end) {
-        return false;
+        try {
+            Calendar s = Calendar.getInstance();
+            Calendar e = Calendar.getInstance();
+            s.setTime(dateFormat.parse(start));
+            e.setTime(dateFormat.parse(end));
+            return !e.before(s);
+        } catch (Exception e) {
+            return false;
+        }
     }
 
     private int calculateMonthsBetween(String start, String end) {
@@ -167,6 +215,7 @@ public class LeaseAgreementsActivity extends AppCompatActivity {
             int monthDiff = endCal.get(Calendar.MONTH) - startCal.get(Calendar.MONTH);
             int totalMonths = yearDiff * 12 + monthDiff;
 
+            // Add 1 month if day of end >= day of start
             if (endCal.get(Calendar.DAY_OF_MONTH) >= startCal.get(Calendar.DAY_OF_MONTH)) {
                 totalMonths += 1;
             }

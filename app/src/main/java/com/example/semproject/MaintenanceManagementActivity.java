@@ -2,9 +2,11 @@ package com.example.semproject;
 
 import android.os.Bundle;
 import android.view.View;
+import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
 import android.widget.Button;
 import android.widget.EditText;
+import android.widget.ListView;
 import android.widget.Spinner;
 import android.widget.Toast;
 
@@ -22,9 +24,12 @@ import java.util.Locale;
 
 public class MaintenanceManagementActivity extends AppCompatActivity {
 
-    private Spinner spinnerRooms;
+    private Spinner spinnerRooms, spinnerStatus;
     private EditText editTextDescription;
     private Button btnSubmit;
+    private ListView listViewRequests;
+
+    private int editingRequestId = -1;
     private int tenantId = -1;
 
     private List<LeaseDetails> leaseList;
@@ -43,10 +48,14 @@ public class MaintenanceManagementActivity extends AppCompatActivity {
             return insets;
         });
 
+        // Initialize views
         spinnerRooms = findViewById(R.id.spinnerRooms);
+        spinnerStatus = findViewById(R.id.spinnerStatus);
         editTextDescription = findViewById(R.id.editTextDescription);
         btnSubmit = findViewById(R.id.btnSubmit);
+        listViewRequests = findViewById(R.id.listViewRequests);
 
+        // Get tenantId from intent
         tenantId = getIntent().getIntExtra("tenantId", -1);
         if (tenantId == -1) {
             Toast.makeText(this, "Invalid tenant ID", Toast.LENGTH_SHORT).show();
@@ -54,9 +63,39 @@ public class MaintenanceManagementActivity extends AppCompatActivity {
             return;
         }
 
+        // Load rooms into spinnerRooms
         loadRoomSpinner();
 
+        // Setup status spinner (filter)
+        setupStatusSpinner();
+
+        // Load tenant requests initially
+        loadTenantRequests();
+
+        // Submit button listener
         btnSubmit.setOnClickListener(v -> submitMaintenanceRequest());
+    }
+
+    private void setupStatusSpinner() {
+        ArrayAdapter<String> statusAdapter = new ArrayAdapter<>(
+                this,
+                android.R.layout.simple_spinner_item,
+                new String[]{"All", "Pending", "Resolved"}
+        );
+        statusAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+        spinnerStatus.setAdapter(statusAdapter);
+
+        spinnerStatus.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+            @Override
+            public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
+                loadTenantRequests();
+            }
+
+            @Override
+            public void onNothingSelected(AdapterView<?> parent) {
+                // No action needed
+            }
+        });
     }
 
     private void loadRoomSpinner() {
@@ -68,7 +107,7 @@ public class MaintenanceManagementActivity extends AppCompatActivity {
 
         for (LeaseDetails lease : leaseList) {
             roomLabels.add("Room " + lease.getRoomNumber());
-            roomIds.add(lease.getRoomId()); // You must add getRoomId() to LeaseDetails
+            roomIds.add(lease.getRoomId());
         }
 
         ArrayAdapter<String> adapter = new ArrayAdapter<>(this, android.R.layout.simple_spinner_item, roomLabels);
@@ -90,18 +129,71 @@ public class MaintenanceManagementActivity extends AppCompatActivity {
             return;
         }
 
-        int roomId = roomIds.get(selectedPosition);
-        String dateReported = new SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Calendar.getInstance().getTime());
-
         DatabaseHelper db = new DatabaseHelper(this);
-        boolean success = db.insertMaintenanceRequest(tenantId, roomId, description, dateReported);
 
-        if (success) {
-            Toast.makeText(this, "Maintenance request submitted", Toast.LENGTH_SHORT).show();
-            editTextDescription.setText("");
-            spinnerRooms.setSelection(0);
+        if (editingRequestId == -1) {
+            // New maintenance request
+            int roomId = roomIds.get(selectedPosition);
+            String dateReported = new SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Calendar.getInstance().getTime());
+            boolean success = db.insertMaintenanceRequest(tenantId, roomId, description, dateReported);
+
+            if (success) {
+                Toast.makeText(this, "Maintenance request submitted", Toast.LENGTH_SHORT).show();
+            } else {
+                Toast.makeText(this, "Failed to submit request", Toast.LENGTH_SHORT).show();
+                return;
+            }
         } else {
-            Toast.makeText(this, "Failed to submit request", Toast.LENGTH_SHORT).show();
+            // Update existing request
+            boolean success = db.updateMaintenanceRequest(editingRequestId, description, "Pending");
+
+            if (success) {
+                Toast.makeText(this, "Request updated", Toast.LENGTH_SHORT).show();
+            } else {
+                Toast.makeText(this, "Failed to update", Toast.LENGTH_SHORT).show();
+                return;
+            }
+            editingRequestId = -1;
+            btnSubmit.setText("Submit Request");
         }
+
+        // Clear inputs and reload list
+        editTextDescription.setText("");
+        spinnerRooms.setSelection(0);
+        loadTenantRequests();
+    }
+
+    private void loadTenantRequests() {
+        DatabaseHelper db = new DatabaseHelper(this);
+
+        String selectedStatus = (spinnerStatus.getSelectedItem() != null)
+                ? spinnerStatus.getSelectedItem().toString()
+                : "All";
+
+        List<MaintenanceReport> reports;
+
+        if ("All".equals(selectedStatus)) {
+            reports = db.getAllMaintenanceReports();
+        } else {
+            reports = db.getMaintenanceReportsByUserIdAndStatus(tenantId, selectedStatus);
+        }
+
+        MaintenanceAdapter adapter = new MaintenanceAdapter(this, reports);
+        listViewRequests.setAdapter(adapter);
+
+        // Allow editing existing requests by clicking on a list item
+        listViewRequests.setOnItemClickListener((parent, view, position, id) -> {
+            MaintenanceReport selectedReport = reports.get(position);
+            editTextDescription.setText(selectedReport.getDescription());
+            editingRequestId = selectedReport.getId();
+            btnSubmit.setText("Update Request");
+
+            // Select the room associated with the report
+            int roomId = selectedReport.getRoomId();
+            int index = roomIds.indexOf(roomId);
+            if (index >= 0) {
+                spinnerRooms.setSelection(index);
+            }
+        });
     }
 }

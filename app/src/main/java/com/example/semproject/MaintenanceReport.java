@@ -1,25 +1,34 @@
 package com.example.semproject;
 
-/**
- * Model class representing a maintenance report submitted by a tenant.
- */
 public class MaintenanceReport {
     private int id;
-    private String tenantName;
-    private String roomNumber;
+    private int tenantId;
+    private int roomId;
     private String description;
     private String status;
     private String dateReported;
 
-    // Constructor
-    public MaintenanceReport(int id, String tenantName, String roomNumber,
+    // Optional display fields (for admin UI)
+    private String roomNumber;
+
+    public MaintenanceReport(int id, int tenantId, int roomId,
                              String description, String status, String dateReported) {
         this.id = id;
-        this.tenantName = tenantName;
-        this.roomNumber = roomNumber;
+        this.tenantId = tenantId;
+        this.roomId = roomId;
         this.description = description;
         this.status = status;
         this.dateReported = dateReported;
+    }
+
+    // Overloaded constructor for admin display
+    public MaintenanceReport(int id, String tenantName, String roomNumber, String description, String status, String date) {
+        this.id = id;
+        this.description = description;
+        this.status = status;
+        this.dateReported = date;
+        this.roomNumber = roomNumber;
+        // tenantName is not stored here but could be added as another field if needed
     }
 
     // Getters
@@ -27,12 +36,12 @@ public class MaintenanceReport {
         return id;
     }
 
-    public String getTenantName() {
-        return tenantName;
+    public int getTenantId() {
+        return tenantId;
     }
 
-    public String getRoomNumber() {
-        return roomNumber;
+    public int getRoomId() {
+        return roomId;
     }
 
     public String getDescription() {
@@ -47,13 +56,21 @@ public class MaintenanceReport {
         return dateReported;
     }
 
-    // Setters (optional, if needed)
-    public void setTenantName(String tenantName) {
-        this.tenantName = tenantName;
+    public String getRoomNumber() {
+        return roomNumber;
     }
 
-    public void setRoomNumber(String roomNumber) {
-        this.roomNumber = roomNumber;
+    // Setters
+    public void setId(int id) {
+        this.id = id;
+    }
+
+    public void setTenantId(int tenantId) {
+        this.tenantId = tenantId;
+    }
+
+    public void setRoomId(int roomId) {
+        this.roomId = roomId;
     }
 
     public void setDescription(String description) {
@@ -66,5 +83,9 @@ public class MaintenanceReport {
 
     public void setDateReported(String dateReported) {
         this.dateReported = dateReported;
+    }
+
+    public void setRoomNumber(String roomNumber) {
+        this.roomNumber = roomNumber;
     }
 }

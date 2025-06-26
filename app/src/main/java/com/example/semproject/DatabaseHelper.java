@@ -5,6 +5,7 @@ import android.content.Context;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteOpenHelper;
+import com.example.semproject.MaintenanceReport;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -436,4 +437,54 @@ public class DatabaseHelper extends SQLiteOpenHelper {
         db.close();
         return list;
     }
+
+    public boolean updateMaintenanceRequest(int requestId, String newDescription, String newStatus) {
+        SQLiteDatabase db = this.getWritableDatabase();
+        ContentValues values = new ContentValues();
+        values.put("description", newDescription);
+        values.put("status", newStatus); // Optional: Only if status change is allowed
+
+        int rows = db.update("maintenance_reports", values, "id = ?", new String[]{String.valueOf(requestId)});
+        db.close();
+        return rows > 0;
+    }
+
+    // In DatabaseHelper.java, add:
+
+    public List<MaintenanceReport> getMaintenanceReportsByUserIdAndStatus(int tenantId, String status) {
+        List<MaintenanceReport> list = new ArrayList<>();
+        SQLiteDatabase db = this.getReadableDatabase();
+
+        String query = "SELECT m." + COL_MAINTENANCE_ID + ", m." + COL_MAINTENANCE_USER_ID + ", m." + COL_MAINTENANCE_ROOM_ID + ", " +
+                "m." + COL_MAINTENANCE_DESC + ", m." + COL_MAINTENANCE_STATUS + ", m." + COL_MAINTENANCE_DATE + " " +
+                "FROM " + TABLE_MAINTENANCE + " m " +
+                "WHERE m." + COL_MAINTENANCE_USER_ID + " = ? AND m." + COL_MAINTENANCE_STATUS + " = ? " +
+                "ORDER BY m." + COL_MAINTENANCE_DATE + " DESC";
+
+        Cursor cursor = db.rawQuery(query, new String[]{String.valueOf(tenantId), status});
+
+        if (cursor.moveToFirst()) {
+            do {
+                int id = cursor.getInt(0);
+                int userId = cursor.getInt(1);
+                int roomId = cursor.getInt(2);
+                String description = cursor.getString(3);
+                String statusText = cursor.getString(4);
+                String date = cursor.getString(5);
+
+                MaintenanceReport report = new MaintenanceReport(id, userId, roomId, description, statusText, date);
+                list.add(report);
+            } while (cursor.moveToNext());
+        }
+
+        cursor.close();
+        db.close();
+        return list;
+    }
+
+
+
+
+
+
 }

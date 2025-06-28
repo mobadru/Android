@@ -108,8 +108,7 @@ public class DatabaseHelper extends SQLiteOpenHelper {
                 "FOREIGN KEY(" + COL_PAYMENT_LEASE_ID + ") REFERENCES " + TABLE_LEASE + "(" + COL_LEASE_ID + "))";
         db.execSQL(createPaymentsTable);
 
-        // Maintenance Reports Table
-        db.execSQL("CREATE TABLE " + TABLE_MAINTENANCE + " (" +
+        String createMaintenance = "CREATE TABLE " + TABLE_MAINTENANCE + " (" +
                 COL_MAINTENANCE_ID + " INTEGER PRIMARY KEY AUTOINCREMENT, " +
                 COL_MAINTENANCE_USER_ID + " INTEGER, " +
                 COL_MAINTENANCE_ROOM_ID + " INTEGER, " +
@@ -117,8 +116,8 @@ public class DatabaseHelper extends SQLiteOpenHelper {
                 COL_MAINTENANCE_STATUS + " TEXT DEFAULT 'Pending', " +
                 COL_MAINTENANCE_DATE + " TEXT, " +
                 "FOREIGN KEY(" + COL_MAINTENANCE_USER_ID + ") REFERENCES " + TABLE_USERS + "(" + COL_ID + "), " +
-                "FOREIGN KEY(" + COL_MAINTENANCE_ROOM_ID + ") REFERENCES " + TABLE_ROOMS + "(" + COL_ROOM_ID + "))");
-
+                "FOREIGN KEY(" + COL_MAINTENANCE_ROOM_ID + ") REFERENCES " + TABLE_ROOMS + "(" + COL_ROOM_ID + "))";
+        db.execSQL(createMaintenance);
 
         // Insert default admin user
         ContentValues adminValues = new ContentValues();
@@ -410,7 +409,7 @@ public class DatabaseHelper extends SQLiteOpenHelper {
     }
 
     // Get all maintenance reports (for admin)
-    public List<MaintenanceReport> getAllMaintenanceReports() {
+    public List<MaintenanceReport> getAllMaintenance() {
         List<MaintenanceReport> list = new ArrayList<>();
         SQLiteDatabase db = this.getReadableDatabase();
         String query = "SELECT m." + COL_MAINTENANCE_ID + ", u." + COL_NAME + ", r." + COL_ROOM_NUMBER + ", " +
@@ -579,6 +578,47 @@ public class DatabaseHelper extends SQLiteOpenHelper {
         return rows > 0;
     }
 
+    // Get all maintenance reports
+    public List<MaintenanceReport> getAllMaintenanceReports() {
+        List<MaintenanceReport> reports = new ArrayList<>();
+        SQLiteDatabase db = getReadableDatabase();
+        String query = "SELECT m.id, m.description, m.status, m.date_reported, r.room_number " +
+                "FROM maintenance_reports m JOIN rooms r ON m.room_id = r.id";
+        Cursor cursor = db.rawQuery(query, null);
+
+        if (cursor.moveToFirst()) {
+            do {
+                int id = cursor.getInt(0);
+                String desc = cursor.getString(1);
+                String status = cursor.getString(2);
+                String date = cursor.getString(3);
+                String room = cursor.getString(4);
+                reports.add(new MaintenanceReport(id, "", room, desc, status, date));
+            } while (cursor.moveToNext());
+        }
+
+        cursor.close();
+        db.close();
+        return reports;
+    }
+
+    // Update only maintenance status
+    public boolean updateMaintenanceStatus(int id, String status) {
+        SQLiteDatabase db = getWritableDatabase();
+        ContentValues values = new ContentValues();
+        values.put(COL_MAINTENANCE_STATUS, status);
+        int rows = db.update(TABLE_MAINTENANCE, values, COL_MAINTENANCE_ID + " = ?", new String[]{String.valueOf(id)});
+        db.close();
+        return rows > 0;
+    }
+
+    // Delete maintenance record
+    public boolean deleteMaintenance(int id) {
+        SQLiteDatabase db = getWritableDatabase();
+        int rows = db.delete(TABLE_MAINTENANCE, COL_MAINTENANCE_ID + " = ?", new String[]{String.valueOf(id)});
+        db.close();
+        return rows > 0;
+    }
 
 
 

@@ -34,7 +34,7 @@ public class OwnerDashboardActivity extends AppCompatActivity {
 
         findViewById(R.id.cardManageMaintenance).setOnClickListener(v -> {
             // TODO: Replace with actual activity when ready
-            startActivity(new Intent(this, MaintenanceManagementActivity.class));
+            startActivity(new Intent(this, OwnerMaintenance.class));
         });
 
         findViewById(R.id.cardManageMessages).setOnClickListener(v -> {

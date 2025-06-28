@@ -11,6 +11,9 @@
         android:theme="@style/Theme.SemProject"
         tools:targetApi="31">
         <activity
+            android:name=".OwnerMaintenance"
+            android:exported="false" />
+        <activity
             android:name=".Owner_Payments"
             android:exported="false" />
 

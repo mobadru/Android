@@ -482,6 +482,105 @@ public class DatabaseHelper extends SQLiteOpenHelper {
         return list;
     }
 
+    public List<LeaseDetails> getAllLeases() {
+        List<LeaseDetails> leases = new ArrayList<>();
+        SQLiteDatabase db = this.getReadableDatabase();
+
+        String query = "SELECT l." + COL_LEASE_ID + ", u." + COL_NAME + " AS userName, r." + COL_ROOM_NUMBER + " AS roomNumber, " +
+                "r." + COL_RENT_AMOUNT + ", l." + COL_LEASE_START + ", l." + COL_LEASE_END + ", r." + COL_ROOM_ID + " " +
+                "FROM " + TABLE_LEASE + " l " +
+                "JOIN " + TABLE_USERS + " u ON l." + COL_LEASE_USER_ID + " = u." + COL_ID + " " +
+                "JOIN " + TABLE_ROOMS + " r ON l." + COL_LEASE_ROOM_ID + " = r." + COL_ROOM_ID;
+
+        Cursor cursor = db.rawQuery(query, null);
+
+        if (cursor.moveToFirst()) {
+            do {
+                int leaseId = cursor.getInt(cursor.getColumnIndexOrThrow(COL_LEASE_ID));
+                String userName = cursor.getString(cursor.getColumnIndexOrThrow("userName"));
+                String roomNumber = cursor.getString(cursor.getColumnIndexOrThrow("roomNumber"));
+                double rentAmount = cursor.getDouble(cursor.getColumnIndexOrThrow(COL_RENT_AMOUNT));
+                String leaseStart = cursor.getString(cursor.getColumnIndexOrThrow(COL_LEASE_START));
+                String leaseEnd = cursor.getString(cursor.getColumnIndexOrThrow(COL_LEASE_END));
+                int roomId = cursor.getInt(cursor.getColumnIndexOrThrow(COL_ROOM_ID));
+
+                LeaseDetails lease = new LeaseDetails(
+                        leaseId, userName, roomNumber, rentAmount, leaseStart, leaseEnd, roomId
+                );
+
+                leases.add(lease);
+            } while (cursor.moveToNext());
+        }
+
+        cursor.close();
+        db.close();
+        return leases;
+    }
+
+    public boolean updateLease(LeaseDetails lease) {
+        SQLiteDatabase db = this.getWritableDatabase();
+        ContentValues values = new ContentValues();
+
+        values.put(COL_LEASE_START, lease.getLeaseStart());
+        values.put(COL_LEASE_END, lease.getLeaseEnd());
+
+        int rows = db.update(TABLE_LEASE, values, COL_LEASE_ID + " = ?", new String[]{String.valueOf(lease.getLeaseId())});
+        db.close();
+        return rows > 0;
+    }
+
+    public boolean deleteLease(int leaseId) {
+        SQLiteDatabase db = this.getWritableDatabase();
+        int rows = db.delete(TABLE_LEASE, COL_LEASE_ID + " = ?", new String[]{String.valueOf(leaseId)});
+        db.close();
+        return rows > 0;
+    }
+
+    // Get all payments
+    public List<Payment> getAllPayments() {
+        List<Payment> paymentList = new ArrayList<>();
+        SQLiteDatabase db = this.getReadableDatabase();
+
+        Cursor cursor = db.rawQuery("SELECT * FROM " + TABLE_PAYMENTS, null);
+
+        if (cursor.moveToFirst()) {
+            do {
+                int paymentId = cursor.getInt(cursor.getColumnIndexOrThrow(COL_PAYMENT_ID));
+                int userId = cursor.getInt(cursor.getColumnIndexOrThrow(COL_PAYMENT_USER_ID));
+                int leaseId = cursor.getInt(cursor.getColumnIndexOrThrow(COL_PAYMENT_LEASE_ID));
+                double amount = cursor.getDouble(cursor.getColumnIndexOrThrow(COL_PAYMENT_AMOUNT));
+                String date = cursor.getString(cursor.getColumnIndexOrThrow(COL_PAYMENT_DATE));
+
+                paymentList.add(new Payment(paymentId, userId, leaseId, amount, date));
+            } while (cursor.moveToNext());
+        }
+
+        cursor.close();
+        db.close();
+        return paymentList;
+    }
+
+    // Update a payment
+    public boolean updatePayment(int paymentId, double newAmount, String newDate) {
+        SQLiteDatabase db = this.getWritableDatabase();
+        ContentValues values = new ContentValues();
+        values.put(COL_PAYMENT_AMOUNT, newAmount);
+        values.put(COL_PAYMENT_DATE, newDate);
+        int rows = db.update(TABLE_PAYMENTS, values, COL_PAYMENT_ID + " = ?", new String[]{String.valueOf(paymentId)});
+        db.close();
+        return rows > 0;
+    }
+
+    // Delete a payment
+    public boolean deletePayment(int paymentId) {
+        SQLiteDatabase db = this.getWritableDatabase();
+        int rows = db.delete(TABLE_PAYMENTS, COL_PAYMENT_ID + " = ?", new String[]{String.valueOf(paymentId)});
+        db.close();
+        return rows > 0;
+    }
+
+
+
 
 
 

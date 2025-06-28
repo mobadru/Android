@@ -24,7 +24,7 @@ public class OwnerDashboardActivity extends AppCompatActivity {
 
         findViewById(R.id.cardViewPayments).setOnClickListener(v -> {
             // TODO: Replace with actual activity when ready
-            startActivity(new Intent(this, PaymentsActivity.class));
+            startActivity(new Intent(this, Owner_Payments.class));
         });
 
         findViewById(R.id.cardManageRooms).setOnClickListener(v -> {

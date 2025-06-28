@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:orientation="vertical"
+    android:padding="20dp"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content">
+
+    <EditText
+        android:id="@+id/etRentAmount"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:hint="Rent Amount"
+        android:inputType="numberDecimal" />
+
+    <EditText
+        android:id="@+id/etLeaseStart"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:hint="Lease Start Date"
+        android:inputType="date" />
+
+    <EditText
+        android:id="@+id/etLeaseEnd"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:hint="Lease End Date"
+        android:inputType="date" />
+</LinearLayout>

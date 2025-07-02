@@ -3,12 +3,7 @@ package com.example.semproject;
 import android.app.DatePickerDialog;
 import android.os.Bundle;
 import android.view.View;
-import android.widget.Button;
-import android.widget.DatePicker;
-import android.widget.LinearLayout;
-import android.widget.TextView;
-import android.widget.Toast;
-
+import android.widget.*;
 import androidx.activity.EdgeToEdge;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.graphics.Insets;
@@ -32,7 +27,7 @@ public class LeaseAgreementsActivity extends AppCompatActivity {
         EdgeToEdge.enable(this);
         setContentView(R.layout.activity_lease_agreements);
 
-        // Handle window insets for padding
+        // Adjust padding for system bars (Edge-to-edge)
         ViewCompat.setOnApplyWindowInsetsListener(findViewById(R.id.main), (v, insets) -> {
             Insets systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars());
             v.setPadding(systemBars.left, systemBars.top, systemBars.right, systemBars.bottom);
@@ -71,6 +66,7 @@ public class LeaseAgreementsActivity extends AppCompatActivity {
             TextView tvEndDate = roomCard.findViewById(R.id.tvEndDate);
             TextView tvDuration = roomCard.findViewById(R.id.tvDuration);
             TextView tvTotalCost = roomCard.findViewById(R.id.tvTotalCost);
+            TextView tvLeaseStatus = roomCard.findViewById(R.id.tvLeaseStatus);
             Button btnUpdate = roomCard.findViewById(R.id.btnUpdateLease);
             Button btnMakePayment = roomCard.findViewById(R.id.btnMakePayment);
 
@@ -85,12 +81,34 @@ public class LeaseAgreementsActivity extends AppCompatActivity {
             double totalCost = months * lease.getRentAmount();
             tvTotalCost.setText(String.format(Locale.US, "TZS : %.2f", totalCost));
 
+            String status = lease.getStatus();
+            tvLeaseStatus.setText("Status: " + status);
+
+            // Enable/disable buttons based on status
+            switch (status.toLowerCase(Locale.ROOT)) {
+                case "pending":
+                    btnMakePayment.setEnabled(false);
+                    btnUpdate.setEnabled(true);
+                    break;
+                case "active":
+                    btnMakePayment.setEnabled(true);
+                    btnUpdate.setEnabled(false);
+                    break;
+                case "terminated":// handle any spelling variants if needed
+                    btnMakePayment.setEnabled(false);
+                    btnUpdate.setEnabled(false);
+                    break;
+                default:
+                    // Default behavior if status is unknown
+                    btnMakePayment.setEnabled(false);
+                    btnUpdate.setEnabled(false);
+                    break;
+            }
+
             btnUpdate.setOnClickListener(v -> showUpdateDialog(lease, db));
 
             btnMakePayment.setOnClickListener(v -> {
                 String totalCostStr = tvTotalCost.getText().toString();
-
-                // Extract numeric value from the string, e.g., "TZS : 10000.00" -> "10000.00"
                 String numericPart = totalCostStr.replaceAll("[^\\d.]+", "");
                 double totalCostDouble;
 
@@ -126,6 +144,7 @@ public class LeaseAgreementsActivity extends AppCompatActivity {
         }
     }
 
+
     private void showUpdateDialog(LeaseDetails lease, DatabaseHelper db) {
         View dialogView = getLayoutInflater().inflate(R.layout.dialog_update_lease, null);
         TextView tvDialogStartDate = dialogView.findViewById(R.id.tvDialogStartDate);
@@ -137,6 +156,7 @@ public class LeaseAgreementsActivity extends AppCompatActivity {
 
         final String[] startDate = {lease.getLeaseStart()};
         final String[] endDate = {lease.getLeaseEnd()};
+        final String[] status = {lease.getStatus()};
 
         tvDialogStartDate.setOnClickListener(v -> showDatePickerDialog(date -> {
             startDate[0] = date;
@@ -161,7 +181,8 @@ public class LeaseAgreementsActivity extends AppCompatActivity {
                         return;
                     }
 
-                    boolean updated = db.updateLeaseDates(lease.getLeaseId(), startDate[0], endDate[0]);
+                    boolean updated = db.updateLeaseDates(lease.getLeaseId(), startDate[0], endDate[0], status[0]);
+
                     if (updated) {
                         Toast.makeText(this, "Lease updated successfully", Toast.LENGTH_SHORT).show();
                         loadLeasedRooms();

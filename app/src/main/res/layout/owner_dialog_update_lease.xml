@@ -5,24 +5,30 @@
     android:layout_width="match_parent"
     android:layout_height="wrap_content">
 
-    <EditText
-        android:id="@+id/etRentAmount"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:hint="Rent Amount"
-        android:inputType="numberDecimal" />
+<!--    <EditText-->
+<!--        android:id="@+id/etRentAmount"-->
+<!--        android:layout_width="match_parent"-->
+<!--        android:layout_height="wrap_content"-->
+<!--        android:hint="Rent Amount"-->
+<!--        android:inputType="numberDecimal" />-->
 
-    <EditText
-        android:id="@+id/etLeaseStart"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:hint="Lease Start Date"
-        android:inputType="date" />
+<!--    <EditText-->
+<!--        android:id="@+id/etLeaseStart"-->
+<!--        android:layout_width="match_parent"-->
+<!--        android:layout_height="wrap_content"-->
+<!--        android:hint="Lease Start Date"-->
+<!--        android:inputType="date" />-->
 
-    <EditText
-        android:id="@+id/etLeaseEnd"
+<!--    <EditText-->
+<!--        android:id="@+id/etLeaseEnd"-->
+<!--        android:layout_width="match_parent"-->
+<!--        android:layout_height="wrap_content"-->
+<!--        android:hint="Lease End Date"-->
+<!--        android:inputType="date" />-->
+
+
+    <Spinner
+        android:id="@+id/spinnerLeaseStatus"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:hint="Lease End Date"
-        android:inputType="date" />
+        android:layout_height="wrap_content"/>
 </LinearLayout>

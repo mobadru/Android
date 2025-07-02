@@ -66,6 +66,10 @@ public class PaymentsActivity extends AppCompatActivity {
             tvPaymentLeaseId.setText("Lease ID: " + payment.getLeaseId());
             tvPaymentAmount.setText(String.format("Amount: TZS %.2f", payment.getAmount()));
             tvPaymentDate.setText("Date: " + payment.getPaymentDate());
+            TextView tvPaymentStatus = paymentCard.findViewById(R.id.tvPaymentStatus);
+            tvPaymentStatus.setText("Status: " + payment.getStatus());
+
+
 
             containerPayments.addView(paymentCard);
         }

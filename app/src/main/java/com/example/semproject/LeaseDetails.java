@@ -8,8 +8,22 @@ public class LeaseDetails {
     private String leaseStart;
     private String leaseEnd;
     private int roomId;
+    private String status;
 
-    // Constructor
+    // Constructor with all fields
+    public LeaseDetails(int leaseId, String userName, String roomNumber, double rentAmount,
+                        String leaseStart, String leaseEnd, int roomId, String status) {
+        this.leaseId = leaseId;
+        this.userName = userName;
+        this.roomNumber = roomNumber;
+        this.rentAmount = rentAmount;
+        this.leaseStart = leaseStart;
+        this.leaseEnd = leaseEnd;
+        this.roomId = roomId;
+        this.status = status;
+    }
+
+    // Constructor without status
     public LeaseDetails(int leaseId, String userName, String roomNumber, double rentAmount,
                         String leaseStart, String leaseEnd, int roomId) {
         this.leaseId = leaseId;
@@ -19,6 +33,7 @@ public class LeaseDetails {
         this.leaseStart = leaseStart;
         this.leaseEnd = leaseEnd;
         this.roomId = roomId;
+        this.status = "Pending"; // or null, or any default
     }
 
     // Getters
@@ -50,7 +65,11 @@ public class LeaseDetails {
         return roomId;
     }
 
-    // Optional Setters
+    public String getStatus() {
+        return status;
+    }
+
+    // Setters
     public void setLeaseId(int leaseId) {
         this.leaseId = leaseId;
     }
@@ -77,5 +96,9 @@ public class LeaseDetails {
 
     public void setRoomId(int roomId) {
         this.roomId = roomId;
+    }
+
+    public void setStatus(String status) {
+        this.status = status;
     }
 }

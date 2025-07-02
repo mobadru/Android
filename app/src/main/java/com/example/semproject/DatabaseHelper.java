@@ -5,7 +5,6 @@ import android.content.Context;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteOpenHelper;
-import com.example.semproject.MaintenanceReport;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -14,7 +13,9 @@ public class DatabaseHelper extends SQLiteOpenHelper {
 
     public static final String DATABASE_NAME = "UserManagement.db";
     public static final int DATABASE_VERSION = 1;
-
+    public static final String COL_RENT_AMOUNT = "rentAmount";
+    public static final String COL_LEASE_STATUS = "status";
+    public static final String COL_PAYMENT_STATUS = "status";
     // Role constants
     public static final String ROLE_ADMIN = "ADMIN";
     public static final String ROLE_TENANT = "TENANT";
@@ -33,7 +34,7 @@ public class DatabaseHelper extends SQLiteOpenHelper {
     public static final String COL_ROOM_NUMBER = "room_number";
     public static final String COL_DESCRIPTION = "description";
     public static final String COL_TYPE = "type";
-    public static final String COL_RENT_AMOUNT = "rent_amount";
+
     public static final String COL_STATUS = "status";
 
     // LEASE AGREEMENT TABLE
@@ -61,6 +62,7 @@ public class DatabaseHelper extends SQLiteOpenHelper {
     public static final String COL_MAINTENANCE_DESC = "description";
     public static final String COL_MAINTENANCE_STATUS = "status";
     public static final String COL_MAINTENANCE_DATE = "date_reported";
+
     public DatabaseHelper(Context context) {
         super(context, DATABASE_NAME, null, DATABASE_VERSION);
     }
@@ -91,11 +93,14 @@ public class DatabaseHelper extends SQLiteOpenHelper {
                 COL_LEASE_ID + " INTEGER PRIMARY KEY AUTOINCREMENT, " +
                 COL_LEASE_USER_ID + " INTEGER NOT NULL, " +
                 COL_LEASE_ROOM_ID + " INTEGER NOT NULL, " +
+                "rent_amount REAL, " +
                 COL_LEASE_START + " TEXT, " +
                 COL_LEASE_END + " TEXT, " +
+                "status TEXT DEFAULT 'Pending', " +
                 "FOREIGN KEY(" + COL_LEASE_USER_ID + ") REFERENCES " + TABLE_USERS + "(" + COL_ID + "), " +
                 "FOREIGN KEY(" + COL_LEASE_ROOM_ID + ") REFERENCES " + TABLE_ROOMS + "(" + COL_ROOM_ID + "))";
         db.execSQL(createLeaseTable);
+
 
         // Create Payments Table
         String createPaymentsTable = "CREATE TABLE " + TABLE_PAYMENTS + " (" +
@@ -104,9 +109,20 @@ public class DatabaseHelper extends SQLiteOpenHelper {
                 COL_PAYMENT_LEASE_ID + " INTEGER NOT NULL, " +
                 COL_PAYMENT_AMOUNT + " REAL NOT NULL, " +
                 COL_PAYMENT_DATE + " TEXT NOT NULL, " +
+                "status TEXT DEFAULT 'Pending', " +
                 "FOREIGN KEY(" + COL_PAYMENT_USER_ID + ") REFERENCES " + TABLE_USERS + "(" + COL_ID + "), " +
                 "FOREIGN KEY(" + COL_PAYMENT_LEASE_ID + ") REFERENCES " + TABLE_LEASE + "(" + COL_LEASE_ID + "))";
         db.execSQL(createPaymentsTable);
+
+        String createMessagesTable = "CREATE TABLE messages (" +
+                "id INTEGER PRIMARY KEY AUTOINCREMENT, " +
+                "sender_id INTEGER, " +
+                "receiver_id INTEGER, " +
+                "message TEXT, " +
+                "timestamp TEXT" +
+                ")";
+        db.execSQL(createMessagesTable);
+
 
         String createMaintenance = "CREATE TABLE " + TABLE_MAINTENANCE + " (" +
                 COL_MAINTENANCE_ID + " INTEGER PRIMARY KEY AUTOINCREMENT, " +
@@ -135,33 +151,30 @@ public class DatabaseHelper extends SQLiteOpenHelper {
         db.execSQL("DROP TABLE IF EXISTS " + TABLE_ROOMS);
         db.execSQL("DROP TABLE IF EXISTS " + TABLE_MAINTENANCE);
         db.execSQL("DROP TABLE IF EXISTS " + TABLE_USERS);
+        db.execSQL("DROP TABLE IF EXISTS messages");
+        db.execSQL("ALTER TABLE payments ADD COLUMN status TEXT DEFAULT 'Pending'");
+
+
         onCreate(db);
     }
 
+
     // ----------- PAYMENT INSERTION --------------
 
-    /**
-     * Inserts a payment record into the payments table.
-     *
-     * @param userId      tenant/user ID making the payment
-     * @param leaseId     lease agreement ID linked to the payment
-     * @param amount      payment amount (as double)
-     * @param paymentDate payment date in "yyyy-MM-dd" format
-     * @return true if insertion was successful, false otherwise
-     */
+
     public boolean insertPayment(int userId, int leaseId, double amount, String paymentDate) {
         SQLiteDatabase db = this.getWritableDatabase();
-
         ContentValues values = new ContentValues();
         values.put(COL_PAYMENT_USER_ID, userId);
         values.put(COL_PAYMENT_LEASE_ID, leaseId);
         values.put(COL_PAYMENT_AMOUNT, amount);
         values.put(COL_PAYMENT_DATE, paymentDate);
-
         long result = db.insert(TABLE_PAYMENTS, null, values);
         db.close();
         return result != -1;
     }
+
+
 
     // ------------------ USER CRUD ------------------
 
@@ -182,9 +195,9 @@ public class DatabaseHelper extends SQLiteOpenHelper {
         SQLiteDatabase db = this.getReadableDatabase();
 
         Cursor cursor = db.rawQuery(
-                "SELECT " + COL_PAYMENT_ID + ", " + COL_PAYMENT_USER_ID + ", " + COL_PAYMENT_LEASE_ID + ", " + COL_PAYMENT_AMOUNT + ", " + COL_PAYMENT_DATE +
-                        " FROM " + TABLE_PAYMENTS + " WHERE " + COL_PAYMENT_USER_ID + " = ?",
-                new String[]{String.valueOf(userId)});
+                "SELECT id, user_id, lease_id, amount, payment_date, status FROM payments WHERE user_id = ?",
+                new String[]{String.valueOf(userId)}
+        );
 
         if (cursor.moveToFirst()) {
             do {
@@ -192,9 +205,10 @@ public class DatabaseHelper extends SQLiteOpenHelper {
                 int uid = cursor.getInt(cursor.getColumnIndexOrThrow(COL_PAYMENT_USER_ID));
                 int leaseId = cursor.getInt(cursor.getColumnIndexOrThrow(COL_PAYMENT_LEASE_ID));
                 double amount = cursor.getDouble(cursor.getColumnIndexOrThrow(COL_PAYMENT_AMOUNT));
-                String paymentDate = cursor.getString(cursor.getColumnIndexOrThrow(COL_PAYMENT_DATE));
+                String date = cursor.getString(cursor.getColumnIndexOrThrow(COL_PAYMENT_DATE));
+                String status = cursor.getString(cursor.getColumnIndexOrThrow(COL_PAYMENT_STATUS));
 
-                paymentList.add(new Payment(paymentId, uid, leaseId, amount, paymentDate));
+                paymentList.add(new Payment(paymentId, uid, leaseId, amount, date, status));
             } while (cursor.moveToNext());
         }
 
@@ -203,6 +217,8 @@ public class DatabaseHelper extends SQLiteOpenHelper {
 
         return paymentList;
     }
+
+
 
     public boolean insertUserAutoRole(String name, String email, String password) {
         SQLiteDatabase db = this.getReadableDatabase();
@@ -329,16 +345,19 @@ public class DatabaseHelper extends SQLiteOpenHelper {
 
     // ------------------ LEASE AGREEMENTS ------------------
 
-    public boolean insertLeaseAgreement(int userId, int roomId, String leaseStart, String leaseEnd) {
+    public boolean insertLeaseAgreement(int userId, int roomId, double rentAmount, String leaseStart, String leaseEnd, String status) {
         SQLiteDatabase db = this.getWritableDatabase();
         ContentValues values = new ContentValues();
         values.put(COL_LEASE_USER_ID, userId);
         values.put(COL_LEASE_ROOM_ID, roomId);
+        values.put("rent_amount", rentAmount);
         values.put(COL_LEASE_START, leaseStart);
         values.put(COL_LEASE_END, leaseEnd);
+        values.put("status", status);
+
         long result = db.insert(TABLE_LEASE, null, values);
         if (result != -1) {
-            // Mark room as leased
+            // Mark room as leased in rooms table
             ContentValues roomUpdate = new ContentValues();
             roomUpdate.put(COL_STATUS, "Leased");
             db.update(TABLE_ROOMS, roomUpdate, COL_ROOM_ID + "=?", new String[]{String.valueOf(roomId)});
@@ -349,6 +368,7 @@ public class DatabaseHelper extends SQLiteOpenHelper {
         return false;
     }
 
+
     /**
      * Get lease details for a given user.
      */
@@ -357,40 +377,36 @@ public class DatabaseHelper extends SQLiteOpenHelper {
         SQLiteDatabase db = this.getReadableDatabase();
 
         String query = "SELECT l." + COL_LEASE_ID + ", u." + COL_NAME + " AS userName, r." + COL_ROOM_NUMBER + " AS roomNumber, r." + COL_RENT_AMOUNT + ", " +
-                "l." + COL_LEASE_START + ", l." + COL_LEASE_END + ", r." + COL_ROOM_ID + " " +   // add roomId here
-                "FROM " + TABLE_LEASE + " l " +
+                "l." + COL_LEASE_START + ", l." + COL_LEASE_END + ", r." + COL_ROOM_ID + ", l." + COL_LEASE_STATUS +
+                " FROM " + TABLE_LEASE + " l " +
                 "JOIN " + TABLE_USERS + " u ON l." + COL_LEASE_USER_ID + " = u." + COL_ID + " " +
                 "JOIN " + TABLE_ROOMS + " r ON l." + COL_LEASE_ROOM_ID + " = r." + COL_ROOM_ID + " " +
-                "WHERE l." + COL_LEASE_USER_ID + " = ? AND r." + COL_STATUS + " = ?";
+                "WHERE l." + COL_LEASE_USER_ID + " = ?";
 
-        Cursor cursor = db.rawQuery(query, new String[]{String.valueOf(userId), "Leased"});
+        Cursor cursor = db.rawQuery(query, new String[]{String.valueOf(userId)});
 
         if (cursor.moveToFirst()) {
             do {
                 int leaseId = cursor.getInt(cursor.getColumnIndexOrThrow(COL_LEASE_ID));
                 String userName = cursor.getString(cursor.getColumnIndexOrThrow("userName"));
                 String roomNumber = cursor.getString(cursor.getColumnIndexOrThrow("roomNumber"));
-                double rentAmount = cursor.getDouble(cursor.getColumnIndexOrThrow(COL_RENT_AMOUNT));
+                double rentAmount = cursor.getDouble(cursor.getColumnIndexOrThrow(COL_RENT_AMOUNT));  // <--- Use COL_RENT_AMOUNT constant
                 String leaseStart = cursor.getString(cursor.getColumnIndexOrThrow(COL_LEASE_START));
                 String leaseEnd = cursor.getString(cursor.getColumnIndexOrThrow(COL_LEASE_END));
+                String status = cursor.getString(cursor.getColumnIndexOrThrow(COL_LEASE_STATUS));
                 int roomId = cursor.getInt(cursor.getColumnIndexOrThrow(COL_ROOM_ID));
-                leaseDetailsList.add(new LeaseDetails(leaseId, userName, roomNumber, rentAmount, leaseStart, leaseEnd, roomId));
+
+                LeaseDetails lease = new LeaseDetails(leaseId, userName, roomNumber, rentAmount, leaseStart, leaseEnd, roomId, status);
+                leaseDetailsList.add(lease);
             } while (cursor.moveToNext());
         }
+
         cursor.close();
         db.close();
         return leaseDetailsList;
     }
 
-    public boolean updateLeaseDates(int leaseId, String newStart, String newEnd) {
-        SQLiteDatabase db = this.getWritableDatabase();
-        ContentValues values = new ContentValues();
-        values.put(COL_LEASE_START, newStart);
-        values.put(COL_LEASE_END, newEnd);
-        int rows = db.update(TABLE_LEASE, values, COL_LEASE_ID + "=?", new String[]{String.valueOf(leaseId)});
-        db.close();
-        return rows > 0;
-    }
+
 
 
 
@@ -485,28 +501,26 @@ public class DatabaseHelper extends SQLiteOpenHelper {
         List<LeaseDetails> leases = new ArrayList<>();
         SQLiteDatabase db = this.getReadableDatabase();
 
-        String query = "SELECT l." + COL_LEASE_ID + ", u." + COL_NAME + " AS userName, r." + COL_ROOM_NUMBER + " AS roomNumber, " +
-                "r." + COL_RENT_AMOUNT + ", l." + COL_LEASE_START + ", l." + COL_LEASE_END + ", r." + COL_ROOM_ID + " " +
-                "FROM " + TABLE_LEASE + " l " +
-                "JOIN " + TABLE_USERS + " u ON l." + COL_LEASE_USER_ID + " = u." + COL_ID + " " +
-                "JOIN " + TABLE_ROOMS + " r ON l." + COL_LEASE_ROOM_ID + " = r." + COL_ROOM_ID;
-
+        String query = "SELECT l.id, u.name AS userName, r.room_number AS roomNumber, " +
+                "l.rent_amount, l.lease_start, l.lease_end, r.id, l.status " + // added r.id (room ID)
+                "FROM leaseAgreement l " +
+                "JOIN users u ON l.user_id = u.id " +
+                "JOIN rooms r ON l.room_id = r.id";
         Cursor cursor = db.rawQuery(query, null);
+
 
         if (cursor.moveToFirst()) {
             do {
-                int leaseId = cursor.getInt(cursor.getColumnIndexOrThrow(COL_LEASE_ID));
-                String userName = cursor.getString(cursor.getColumnIndexOrThrow("userName"));
-                String roomNumber = cursor.getString(cursor.getColumnIndexOrThrow("roomNumber"));
-                double rentAmount = cursor.getDouble(cursor.getColumnIndexOrThrow(COL_RENT_AMOUNT));
-                String leaseStart = cursor.getString(cursor.getColumnIndexOrThrow(COL_LEASE_START));
-                String leaseEnd = cursor.getString(cursor.getColumnIndexOrThrow(COL_LEASE_END));
-                int roomId = cursor.getInt(cursor.getColumnIndexOrThrow(COL_ROOM_ID));
+                int leaseId = cursor.getInt(0);
+                String username = cursor.getString(1);
+                String roomNumber = cursor.getString(2);
+                double rentAmount = cursor.getDouble(3);
+                String start = cursor.getString(4);
+                String end = cursor.getString(5);
+                int roomId = cursor.getInt(6);
+                String status = cursor.getString(7);
 
-                LeaseDetails lease = new LeaseDetails(
-                        leaseId, userName, roomNumber, rentAmount, leaseStart, leaseEnd, roomId
-                );
-
+                LeaseDetails lease = new LeaseDetails(leaseId, username, roomNumber, rentAmount, start, end, roomId, status);
                 leases.add(lease);
             } while (cursor.moveToNext());
         }
@@ -515,6 +529,7 @@ public class DatabaseHelper extends SQLiteOpenHelper {
         db.close();
         return leases;
     }
+
 
     public boolean updateLease(LeaseDetails lease) {
         SQLiteDatabase db = this.getWritableDatabase();
@@ -544,13 +559,14 @@ public class DatabaseHelper extends SQLiteOpenHelper {
 
         if (cursor.moveToFirst()) {
             do {
+                String status = cursor.getString(cursor.getColumnIndexOrThrow("status"));
                 int paymentId = cursor.getInt(cursor.getColumnIndexOrThrow(COL_PAYMENT_ID));
                 int userId = cursor.getInt(cursor.getColumnIndexOrThrow(COL_PAYMENT_USER_ID));
                 int leaseId = cursor.getInt(cursor.getColumnIndexOrThrow(COL_PAYMENT_LEASE_ID));
                 double amount = cursor.getDouble(cursor.getColumnIndexOrThrow(COL_PAYMENT_AMOUNT));
                 String date = cursor.getString(cursor.getColumnIndexOrThrow(COL_PAYMENT_DATE));
 
-                paymentList.add(new Payment(paymentId, userId, leaseId, amount, date));
+                paymentList.add(new Payment(paymentId, userId, leaseId, amount, date, status));
             } while (cursor.moveToNext());
         }
 
@@ -620,10 +636,62 @@ public class DatabaseHelper extends SQLiteOpenHelper {
         return rows > 0;
     }
 
+    public boolean updatePaymentStatus(int paymentId, String status) {
+        SQLiteDatabase db = this.getWritableDatabase();
+        ContentValues values = new ContentValues();
+        values.put("status", status);
+        int rows = db.update(TABLE_PAYMENTS, values, COL_PAYMENT_ID + " = ?", new String[]{String.valueOf(paymentId)});
+        db.close();
+        return rows > 0;
+    }
+
+    public boolean updateLeaseStatus(int leaseId, String newStatus) {
+        SQLiteDatabase db = this.getWritableDatabase();
+        ContentValues values = new ContentValues();
+        values.put("status", newStatus);
+        int rows = db.update(TABLE_LEASE, values, COL_LEASE_ID + " = ?", new String[]{String.valueOf(leaseId)});
+        db.close();
+        return rows > 0;
+    }
 
 
 
+    public boolean insertMessage(int senderId, int receiverId, String message, String timestamp) {
+        SQLiteDatabase db = this.getWritableDatabase();
+        ContentValues values = new ContentValues();
+        values.put("sender_id", senderId);
+        values.put("receiver_id", receiverId);
+        values.put("message", message);
+        values.put("timestamp", timestamp);
 
+        long result = db.insert("messages", null, values);
+        return result != -1;
+    }
+
+    public int getOwnerId() {
+        SQLiteDatabase db = this.getReadableDatabase();
+        int ownerId = -1;
+
+        Cursor cursor = db.rawQuery("SELECT id FROM users WHERE role = 'Admin' LIMIT 1", null);
+        if (cursor.moveToFirst()) {
+            ownerId = cursor.getInt(0); // Fetch the first Admin ID
+        }
+        cursor.close();
+        return ownerId;
+    }
+
+
+    public boolean updateLeaseDates(int leaseId, String startDate, String endDate, String status) {
+        SQLiteDatabase db = this.getWritableDatabase();
+        ContentValues values = new ContentValues();
+        values.put(COL_LEASE_START, startDate);
+        values.put(COL_LEASE_END, endDate);
+        values.put("status", status);
+
+        int rows = db.update(TABLE_LEASE, values, COL_LEASE_ID + " = ?", new String[]{String.valueOf(leaseId)});
+        db.close();
+        return rows > 0;
+    }
 
 
 }

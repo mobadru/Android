@@ -1,6 +1,7 @@
 package com.example.semproject;
 
 import android.content.Intent;
+import android.net.Uri;
 import android.os.Bundle;
 import android.view.View;
 import android.widget.Toast;
@@ -51,7 +52,7 @@ public class activity_tenant_dashboard extends AppCompatActivity {
         findViewById(R.id.cardMessages).setOnClickListener(v -> openMessages());
         findViewById(R.id.cardProfile).setOnClickListener(v -> openProfile());
 
-        // ✅ Logout button listener - fixed inside onCreate()
+
         Button logoutButton = findViewById(R.id.btnLogout);
         if (logoutButton != null) {
             logoutButton.setOnClickListener(v -> {
@@ -92,12 +93,10 @@ public class activity_tenant_dashboard extends AppCompatActivity {
     }
 
     private void openMessages() {
-        Toast.makeText(this, "Opening Messages...", Toast.LENGTH_SHORT).show();
-        // Intent intent = new Intent(this, MessagesActivity.class);
-        // intent.putExtra("tenantId", tenantId);
-        // startActivity(intent);
+        Intent intent = new Intent(this, TenantMessage.class);
+        intent.putExtra("tenantId", tenantId);
+        startActivity(intent);
     }
-
     private void openProfile() {
         Toast.makeText(this, "Opening Profile...", Toast.LENGTH_SHORT).show();
         // Intent intent = new Intent(this, ProfileActivity.class);

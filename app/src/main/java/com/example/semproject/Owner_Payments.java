@@ -53,31 +53,39 @@ public class Owner_Payments extends AppCompatActivity {
 
     private void showUpdateDialog(Payment payment) {
         AlertDialog.Builder builder = new AlertDialog.Builder(this);
-        View view = LayoutInflater.from(this).inflate(R.layout.owner_dialog_update_payment, null);
-        builder.setView(view);
+        builder.setTitle("Update Payment Status");
 
-        EditText edtAmount = view.findViewById(R.id.edtUpdateAmount);
-        EditText edtDate = view.findViewById(R.id.edtUpdateDate);
+        // Create a Spinner programmatically
+        Spinner spinner = new Spinner(this);
+        ArrayAdapter<String> adapter = new ArrayAdapter<>(
+                this,
+                android.R.layout.simple_spinner_dropdown_item,
+                new String[]{"Pending", "Paid"}
+        );
+        spinner.setAdapter(adapter);
 
-        edtAmount.setText(String.valueOf(payment.getAmount()));
-        edtDate.setText(payment.getPaymentDate());
+        // Set current status if available (assuming status is part of the Payment model)
+        // If you want to store status, modify your Payment model and DB
+        // For now, just default to "Pending"
+        spinner.setSelection(0); // Default to Pending
 
-        builder.setTitle("Update Payment");
+        builder.setView(spinner);
+
         builder.setPositiveButton("Update", (dialog, which) -> {
-            double newAmount = Double.parseDouble(edtAmount.getText().toString());
-            String newDate = edtDate.getText().toString();
+            String newStatus = spinner.getSelectedItem().toString();
 
-            boolean updated = dbHelper.updatePayment(payment.getPaymentId(), newAmount, newDate);
+            // Call your update status method (you need to store this status in DB)
+            boolean updated = dbHelper.updatePaymentStatus(payment.getPaymentId(), newStatus);
             if (updated) {
-                Toast.makeText(this, "Payment updated!", Toast.LENGTH_SHORT).show();
+                Toast.makeText(this, "Status updated!", Toast.LENGTH_SHORT).show();
                 loadPayments();
             } else {
-                Toast.makeText(this, "Failed to update.", Toast.LENGTH_SHORT).show();
+                Toast.makeText(this, "Update failed.", Toast.LENGTH_SHORT).show();
             }
         });
 
         builder.setNegativeButton("Cancel", null);
-        builder.create().show();
+        builder.show();
     }
 
     private void confirmDelete(Payment payment) {

@@ -14,6 +14,7 @@
         android:layout_height="wrap_content"
         android:orientation="vertical">
 
+        <!-- Room Name -->
         <TextView
             android:id="@+id/tvRoomName"
             android:layout_width="match_parent"
@@ -23,6 +24,7 @@
             android:textSize="20sp"
             android:textStyle="bold" />
 
+        <!-- Price -->
         <TextView
             android:id="@+id/tvPrice"
             android:layout_width="match_parent"
@@ -32,6 +34,7 @@
             android:textSize="16sp"
             android:layout_marginBottom="8dp" />
 
+        <!-- Start Date -->
         <TextView
             android:text="Start Date:"
             android:textStyle="bold"
@@ -49,6 +52,7 @@
             android:focusable="true"
             android:background="?selectableItemBackground" />
 
+        <!-- End Date -->
         <TextView
             android:text="End Date:"
             android:textStyle="bold"
@@ -67,6 +71,7 @@
             android:focusable="true"
             android:background="?selectableItemBackground" />
 
+        <!-- Duration -->
         <TextView
             android:text="Duration (months):"
             android:textStyle="bold"
@@ -80,6 +85,7 @@
             android:layout_height="wrap_content"
             android:text="6" />
 
+        <!-- Total Cost -->
         <TextView
             android:text="Total Cost:"
             android:textStyle="bold"
@@ -95,6 +101,17 @@
             android:textColor="#2196F3"
             android:textStyle="bold" />
 
+        <!-- Lease Status -->
+        <TextView
+            android:id="@+id/tvLeaseStatus"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Status: Pending"
+            android:textColor="#2196F3"
+            android:textStyle="bold"
+            android:layout_marginTop="8dp" />
+
+        <!-- Buttons -->
         <Button
             android:id="@+id/btnUpdateLease"
             android:layout_width="match_parent"
@@ -103,7 +120,6 @@
             android:layout_marginTop="12dp"
             android:backgroundTint="#2196F3"
             android:textColor="#FFFFFF" />
-
 
         <Button
             android:id="@+id/btnMakePayment"

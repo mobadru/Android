@@ -26,11 +26,11 @@ import java.util.Locale;
 public class MyRoomActivity extends AppCompatActivity {
 
     private static final String TAG = "MyRoomActivity";
-
     private RecyclerView recyclerView;
     private RoomAdapterTenant roomAdapter;
     private List<Room> roomList;
     private DatabaseHelper dbHelper;
+    private final SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd", Locale.US);
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -40,7 +40,6 @@ public class MyRoomActivity extends AppCompatActivity {
 
         Log.d(TAG, "onCreate: started");
 
-        // Adjust padding for system bars (Edge-to-edge)
         ViewCompat.setOnApplyWindowInsetsListener(findViewById(R.id.activity_room_management), (v, insets) -> {
             Insets systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars());
             v.setPadding(systemBars.left, systemBars.top, systemBars.right, systemBars.bottom);
@@ -62,21 +61,16 @@ public class MyRoomActivity extends AppCompatActivity {
         Log.d(TAG, "Total rooms found in DB: " + allRooms.size());
 
         for (Room room : allRooms) {
-            Log.d(TAG, "Checking room: " + room.getRoomNumber() + ", status: " + room.getStatus());
             if ("Available".equalsIgnoreCase(room.getStatus())) {
                 roomList.add(room);
-                Log.d(TAG, "Added available room: " + room.getRoomNumber());
             }
         }
 
         if (roomList.isEmpty()) {
-            Log.d(TAG, "No available rooms found");
             Toast.makeText(this, "No available rooms at the moment", Toast.LENGTH_SHORT).show();
-        } else {
-            Log.d(TAG, "Available rooms to display: " + roomList.size());
         }
 
-        // Pass the list and the lease click callback
+        // Initialize adapter with lease click callback
         roomAdapter = new RoomAdapterTenant(roomList, this::showLeaseFormDialog);
         recyclerView.setAdapter(roomAdapter);
     }
@@ -94,87 +88,118 @@ public class MyRoomActivity extends AppCompatActivity {
 
         tvRoomName.setText(room.getRoomNumber());
 
-        int rentPerMonth = room.getType().equalsIgnoreCase("master") ? 100000 : 70000;
-        tvPrice.setText(rentPerMonth + " TZS");
-        Log.d(TAG, "Rent per month set to: " + rentPerMonth);
+        // Calculate rent based on room type
+        final double rentPerMonth = room.getType().equalsIgnoreCase("master") ? 100000 : 70000;
+        tvPrice.setText(String.format(Locale.US, "%.2f TZS", rentPerMonth));
 
         final String[] startDate = {""};
         final String[] endDate = {""};
 
-        tvStartDate.setOnClickListener(v -> {
-            Log.d(TAG, "Start date picker opened");
-            Calendar calendar = Calendar.getInstance();
-            new DatePickerDialog(this, (view, year, month, dayOfMonth) -> {
-                startDate[0] = String.format(Locale.US, "%04d-%02d-%02d", year, month + 1, dayOfMonth);
-                tvStartDate.setText(startDate[0]);
-                Log.d(TAG, "Start date selected: " + startDate[0]);
-            }, calendar.get(Calendar.YEAR), calendar.get(Calendar.MONTH), calendar.get(Calendar.DAY_OF_MONTH)).show();
-        });
+        // Date picker for start date
+        tvStartDate.setOnClickListener(v -> showDatePicker((view, year, month, day) -> {
+            startDate[0] = String.format(Locale.US, "%04d-%02d-%02d", year, month + 1, day);
+            tvStartDate.setText(startDate[0]);
+            updateCostDisplay(startDate[0], endDate[0], rentPerMonth, tvDuration, tvTotalCost);
+        }));
 
-        tvEndDate.setOnClickListener(v -> {
-            Log.d(TAG, "End date picker opened");
-            Calendar calendar = Calendar.getInstance();
-            new DatePickerDialog(this, (view, year, month, dayOfMonth) -> {
-                endDate[0] = String.format(Locale.US, "%04d-%02d-%02d", year, month + 1, dayOfMonth);
-                tvEndDate.setText(endDate[0]);
-                Log.d(TAG, "End date selected: " + endDate[0]);
-
-                // Calculate duration in months and total cost
-                try {
-                    SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd", Locale.US);
-                    Date start = sdf.parse(startDate[0]);
-                    Date end = sdf.parse(endDate[0]);
-                    long diffInMillis = end.getTime() - start.getTime();
-
-                    int months = (int) (diffInMillis / (1000L * 60 * 60 * 24 * 30));
-                    months = Math.max(months, 1); // minimum 1 month
-
-                    tvDuration.setText(String.valueOf(months));
-                    tvTotalCost.setText((months * rentPerMonth) + " TZS");
-
-                    Log.d(TAG, "Calculated duration: " + months + " months, total cost: " + (months * rentPerMonth) + " TZS");
-                } catch (Exception e) {
-                    Log.e(TAG, "Error calculating duration and cost", e);
-                }
-            }, calendar.get(Calendar.YEAR), calendar.get(Calendar.MONTH), calendar.get(Calendar.DAY_OF_MONTH)).show();
-        });
+        // Date picker for end date
+        tvEndDate.setOnClickListener(v -> showDatePicker((view, year, month, day) -> {
+            endDate[0] = String.format(Locale.US, "%04d-%02d-%02d", year, month + 1, day);
+            tvEndDate.setText(endDate[0]);
+            updateCostDisplay(startDate[0], endDate[0], rentPerMonth, tvDuration, tvTotalCost);
+        }));
 
         new AlertDialog.Builder(this)
                 .setTitle("Lease Room " + room.getRoomNumber())
                 .setView(dialogView)
                 .setPositiveButton("Submit", (dialog, which) -> {
-                    Log.d(TAG, "Lease form submit clicked");
                     if (startDate[0].isEmpty() || endDate[0].isEmpty()) {
                         Toast.makeText(this, "Please select both dates", Toast.LENGTH_SHORT).show();
-                        Log.d(TAG, "Submit failed: Dates not selected");
                         return;
                     }
 
                     User currentUser = SessionManager.getCurrentUser(this);
                     if (currentUser == null) {
                         Toast.makeText(this, "User not logged in", Toast.LENGTH_SHORT).show();
-                        Log.d(TAG, "Submit failed: User not logged in");
                         return;
                     }
 
-                    Log.d(TAG, "Attempting to insert lease agreement for userId=" + currentUser.getId()
-                            + ", roomId=" + room.getId()
-                            + ", startDate=" + startDate[0]
-                            + ", endDate=" + endDate[0]);
+                    // Calculate duration in months
+                    int months = calculateMonthsBetween(startDate[0], endDate[0]);
+                    if (months <= 0) {
+                        Toast.makeText(this, "Invalid date range", Toast.LENGTH_SHORT).show();
+                        return;
+                    }
 
-                    boolean success = dbHelper.insertLeaseAgreement(currentUser.getId(), room.getId(), startDate[0], endDate[0]);
+                    // Insert lease agreement
+                    boolean success = dbHelper.insertLeaseAgreement(
+                            currentUser.getId(),
+                            room.getId(),
+                            rentPerMonth,
+                            startDate[0],
+                            endDate[0],
+                            "Pending"  // Default status
+                    );
+
                     if (success) {
                         Toast.makeText(this, "Lease created successfully", Toast.LENGTH_SHORT).show();
-                        Log.d(TAG, "Lease agreement inserted successfully");
-                        loadAvailableRooms(); // Refresh the list after lease
+                        loadAvailableRooms(); // Refresh room list
                     } else {
                         Toast.makeText(this, "Failed to save lease", Toast.LENGTH_SHORT).show();
-                        Log.d(TAG, "Failed to insert lease agreement");
                     }
                 })
-                .setNegativeButton("Cancel", (dialog, which) -> {
-                    Log.d(TAG, "Lease form cancelled");
-                })
+                .setNegativeButton("Cancel", null)
                 .show();
+    }
+
+    private void showDatePicker(DatePickerDialog.OnDateSetListener listener) {
+        Calendar cal = Calendar.getInstance();
+        new DatePickerDialog(
+                this,
+                listener,
+                cal.get(Calendar.YEAR),
+                cal.get(Calendar.MONTH),
+                cal.get(Calendar.DAY_OF_MONTH)
+        ).show();
+    }
+
+    private void updateCostDisplay(String start, String end, double rent, TextView tvDuration, TextView tvTotalCost) {
+        if (start.isEmpty() || end.isEmpty()) return;
+
+        try {
+            int months = calculateMonthsBetween(start, end);
+            tvDuration.setText(String.valueOf(months));
+            tvTotalCost.setText(String.format(Locale.US, "%.2f TZS", months * rent));
+        } catch (Exception e) {
+            Log.e(TAG, "Error calculating cost", e);
+        }
+    }
+
+    private int calculateMonthsBetween(String startStr, String endStr) {
+        try {
+            Date start = sdf.parse(startStr);
+            Date end = sdf.parse(endStr);
+
+            if (start == null || end == null || end.before(start)) return 0;
+
+            Calendar startCal = Calendar.getInstance();
+            startCal.setTime(start);
+            Calendar endCal = Calendar.getInstance();
+            endCal.setTime(end);
+
+            int yearDiff = endCal.get(Calendar.YEAR) - startCal.get(Calendar.YEAR);
+            int monthDiff = endCal.get(Calendar.MONTH) - startCal.get(Calendar.MONTH);
+            int totalMonths = yearDiff * 12 + monthDiff;
+
+            // Add partial month if end day >= start day
+            if (endCal.get(Calendar.DAY_OF_MONTH) >= startCal.get(Calendar.DAY_OF_MONTH)) {
+                totalMonths++;
+            }
+
+            return Math.max(totalMonths, 1);
+        } catch (Exception e) {
+            Log.e(TAG, "Date calculation error", e);
+            return 0;
+        }
     }
 }

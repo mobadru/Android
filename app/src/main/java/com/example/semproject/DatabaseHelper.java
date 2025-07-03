@@ -5,13 +5,14 @@ import android.content.Context;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteOpenHelper;
+import android.util.Log;
 
 import java.util.ArrayList;
 import java.util.List;
 
 public class DatabaseHelper extends SQLiteOpenHelper {
 
-    public static final String DATABASE_NAME = "UserManagement.db";
+    public static final String DATABASE_NAME = "baburental.db";
     public static final int DATABASE_VERSION = 1;
     public static final String COL_RENT_AMOUNT = "rentAmount";
     public static final String COL_LEASE_STATUS = "status";
@@ -20,11 +21,24 @@ public class DatabaseHelper extends SQLiteOpenHelper {
     public static final String ROLE_ADMIN = "ADMIN";
     public static final String ROLE_TENANT = "TENANT";
 
+    //notification
+    public static final String TABLE_NOTIFICATIONS = "notifications";
+    public static final String COL_NOTIFICATION_ID = "id";
+    public static final String COL_NOTIFICATION_TYPE = "type";
+    public static final String COL_NOTIFICATION_MESSAGE = "message";
+    public static final String COL_NOTIFICATION_TIMESTAMP = "timestamp";
+    public static final String COL_NOTIFICATION_IS_READ = "is_read";
+    public static final String COL_NOTIFICATION_TARGET_USER_ID = "target_user_id";
+
+
+
     // USERS TABLE
     public static final String TABLE_USERS = "users";
     public static final String COL_ID = "id";
     public static final String COL_NAME = "name";
     public static final String COL_EMAIL = "email";
+    public static final String COL_PHONE = "phone";
+
     public static final String COL_PASSWORD = "password";
     public static final String COL_ROLE = "role";
 
@@ -69,12 +83,24 @@ public class DatabaseHelper extends SQLiteOpenHelper {
 
     @Override
     public void onCreate(SQLiteDatabase db) {
+       //notification
+        String createNotificationsTable = "CREATE TABLE " + TABLE_NOTIFICATIONS + " (" +
+                COL_NOTIFICATION_ID + " INTEGER PRIMARY KEY AUTOINCREMENT, " +
+                COL_NOTIFICATION_TYPE + " TEXT NOT NULL, " +
+                COL_NOTIFICATION_MESSAGE + " TEXT NOT NULL, " +
+                COL_NOTIFICATION_TIMESTAMP + " TEXT NOT NULL, " +
+                COL_NOTIFICATION_IS_READ + " INTEGER DEFAULT 0, " +
+                COL_NOTIFICATION_TARGET_USER_ID + " INTEGER NOT NULL" +
+                ")";
+        db.execSQL(createNotificationsTable);
+
         // Create Users Table
         String createUsersTable = "CREATE TABLE " + TABLE_USERS + " (" +
                 COL_ID + " INTEGER PRIMARY KEY AUTOINCREMENT, " +
                 COL_NAME + " TEXT NOT NULL, " +
                 COL_EMAIL + " TEXT UNIQUE NOT NULL, " +
                 COL_PASSWORD + " TEXT NOT NULL, " +
+                COL_PHONE + " TEXT, " +
                 COL_ROLE + " TEXT NOT NULL)";
         db.execSQL(createUsersTable);
 
@@ -153,6 +179,7 @@ public class DatabaseHelper extends SQLiteOpenHelper {
         db.execSQL("DROP TABLE IF EXISTS " + TABLE_USERS);
         db.execSQL("DROP TABLE IF EXISTS messages");
         db.execSQL("ALTER TABLE payments ADD COLUMN status TEXT DEFAULT 'Pending'");
+        db.execSQL("DROP TABLE IF EXISTS " + TABLE_NOTIFICATIONS);
 
 
         onCreate(db);
@@ -169,7 +196,24 @@ public class DatabaseHelper extends SQLiteOpenHelper {
         values.put(COL_PAYMENT_LEASE_ID, leaseId);
         values.put(COL_PAYMENT_AMOUNT, amount);
         values.put(COL_PAYMENT_DATE, paymentDate);
+
         long result = db.insert(TABLE_PAYMENTS, null, values);
+
+        if (result != -1) {
+            // Fetch user name for notification message
+            String userName = getUserNameById(userId);
+
+            // Optionally, fetch room number or lease info if you want more details
+            // For example, get room number by leaseId (implement getRoomNumberByLeaseId if needed)
+            // String roomNumber = getRoomNumberByLeaseId(leaseId);
+
+            String message = "Payment of TZS " + String.format("%.2f", amount) + " received from " + userName;
+            String timestamp = new java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(new java.util.Date());
+            int adminId = getAdminUserId(); // Ensure this method returns the admin user ID
+
+            insertNotification("payment", message, timestamp, adminId);
+        }
+
         db.close();
         return result != -1;
     }
@@ -178,17 +222,19 @@ public class DatabaseHelper extends SQLiteOpenHelper {
 
     // ------------------ USER CRUD ------------------
 
-    public boolean insertUser(String name, String email, String password, String role) {
+    public boolean insertUser(String name, String email, String phone, String password, String role) {
         SQLiteDatabase db = this.getWritableDatabase();
         ContentValues values = new ContentValues();
         values.put(COL_NAME, name);
         values.put(COL_EMAIL, email);
+        values.put(COL_PHONE, phone);
         values.put(COL_PASSWORD, password);
         values.put(COL_ROLE, (role == null || role.trim().isEmpty()) ? ROLE_TENANT : role);
         long result = db.insert(TABLE_USERS, null, values);
         db.close();
         return result != -1;
     }
+
 
     public List<Payment> getPaymentsByUserId(int userId) {
         List<Payment> paymentList = new ArrayList<>();
@@ -220,7 +266,7 @@ public class DatabaseHelper extends SQLiteOpenHelper {
 
 
 
-    public boolean insertUserAutoRole(String name, String email, String password) {
+    public boolean insertUserAutoRole(String name, String email,String phone, String password) {
         SQLiteDatabase db = this.getReadableDatabase();
         Cursor cursor = db.rawQuery("SELECT COUNT(*) FROM " + TABLE_USERS, null);
         String role = ROLE_TENANT;
@@ -231,7 +277,7 @@ public class DatabaseHelper extends SQLiteOpenHelper {
         }
         cursor.close();
         db.close();
-        return insertUser(name, email, password, role);
+        return insertUser(name, email, password, phone,  role);
     }
 
     public User checkUserCredentials(String email, String password) {
@@ -243,12 +289,60 @@ public class DatabaseHelper extends SQLiteOpenHelper {
             int id = cursor.getInt(cursor.getColumnIndexOrThrow(COL_ID));
             String name = cursor.getString(cursor.getColumnIndexOrThrow(COL_NAME));
             String role = cursor.getString(cursor.getColumnIndexOrThrow(COL_ROLE));
-            user = new User(id, name, email, password, role);
+            String phone = cursor.getString(cursor.getColumnIndexOrThrow(COL_PHONE));
+            user = new User(id, name, email, password, phone ,role);
         }
         cursor.close();
         db.close();
         return user;
     }
+
+    // Fetch room number by room ID
+    public String getRoomNumberById(int roomId) {
+        String roomNumber = "Unknown Room";
+        SQLiteDatabase db = this.getReadableDatabase();
+        Cursor cursor = null;
+        try {
+            cursor = db.query(TABLE_ROOMS,
+                    new String[]{COL_ROOM_NUMBER},
+                    COL_ROOM_ID + "=?",
+                    new String[]{String.valueOf(roomId)},
+                    null, null, null);
+
+            if (cursor != null && cursor.moveToFirst()) {
+                roomNumber = cursor.getString(cursor.getColumnIndexOrThrow(COL_ROOM_NUMBER));
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        } finally {
+            if (cursor != null) cursor.close();
+        }
+        return roomNumber;
+    }
+
+    // Fetch user name by user ID
+    public String getUserNameById(int userId) {
+        String userName = "Unknown User";
+        SQLiteDatabase db = this.getReadableDatabase();
+        Cursor cursor = null;
+        try {
+            cursor = db.query(TABLE_USERS,
+                    new String[]{COL_NAME},
+                    COL_ID + "=?",
+                    new String[]{String.valueOf(userId)},
+                    null, null, null);
+
+            if (cursor != null && cursor.moveToFirst()) {
+                userName = cursor.getString(cursor.getColumnIndexOrThrow(COL_NAME));
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        } finally {
+            if (cursor != null) cursor.close();
+        }
+        return userName;
+    }
+
 
     public List<User> getAllUsers() {
         List<User> userList = new ArrayList<>();
@@ -260,26 +354,50 @@ public class DatabaseHelper extends SQLiteOpenHelper {
                 String name = cursor.getString(cursor.getColumnIndexOrThrow(COL_NAME));
                 String email = cursor.getString(cursor.getColumnIndexOrThrow(COL_EMAIL));
                 String password = cursor.getString(cursor.getColumnIndexOrThrow(COL_PASSWORD));
+                String phone = cursor.getString(cursor.getColumnIndexOrThrow(COL_PHONE));  // <-- Read phone
                 String role = cursor.getString(cursor.getColumnIndexOrThrow(COL_ROLE));
-                userList.add(new User(id, name, email, password, role));
+                userList.add(new User(id, name, email, phone, password, role));
             } while (cursor.moveToNext());
         }
+
         cursor.close();
         db.close();
         return userList;
     }
 
-    public boolean updateUser(int id, String name, String email, String password, String role) {
+    public boolean updateUser(int id, String name, String email, String password, String phone, String role) {
         SQLiteDatabase db = this.getWritableDatabase();
         ContentValues values = new ContentValues();
         values.put(COL_NAME, name);
         values.put(COL_EMAIL, email);
         values.put(COL_PASSWORD, password);
+        values.put(COL_PHONE, phone);  // <-- Update phone here
         values.put(COL_ROLE, role);
         int rows = db.update(TABLE_USERS, values, COL_ID + "=?", new String[]{String.valueOf(id)});
         db.close();
         return rows > 0;
+
     }
+
+    public boolean updateUser(User user) {
+        SQLiteDatabase db = this.getWritableDatabase();
+        ContentValues values = new ContentValues();
+        values.put(COL_NAME, user.getName());
+        values.put(COL_EMAIL, user.getEmail());
+        values.put(COL_PHONE, user.getPhone());
+        values.put(COL_PASSWORD, user.getPassword()); // Consider hashing passwords!
+        // Do not update COL_ID or COL_ROLE here usually, unless explicitly intended
+
+        int rowsAffected = db.update(
+                TABLE_USERS, // Assuming TABLE_USERS is defined
+                values,
+                COL_ID + " = ?", // Update where ID matches
+                new String[]{String.valueOf(user.getId())}
+        );
+        db.close(); // Close database connection
+        return rowsAffected > 0;
+    }
+
 
     public boolean deleteUser(int id) {
         SQLiteDatabase db = this.getWritableDatabase();
@@ -361,12 +479,35 @@ public class DatabaseHelper extends SQLiteOpenHelper {
             ContentValues roomUpdate = new ContentValues();
             roomUpdate.put(COL_STATUS, "Leased");
             db.update(TABLE_ROOMS, roomUpdate, COL_ROOM_ID + "=?", new String[]{String.valueOf(roomId)});
+
+            // Fetch room number and user name for notification message
+            String roomNumber = getRoomNumberById(roomId);
+            String userName = getUserNameById(userId);
+
+            String message = "New lease created for room " + roomNumber + " by user " + userName;
+            String timestamp = new java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(new java.util.Date());
+            int adminId = getAdminUserId(); // Make sure this method returns the admin user ID
+            insertNotification("lease", message, timestamp, adminId);
+
             db.close();
             return true;
         }
         db.close();
         return false;
     }
+
+
+    public int getAdminUserId() {
+        SQLiteDatabase db = this.getReadableDatabase();
+        int adminId = -1;
+        Cursor cursor = db.rawQuery("SELECT id FROM " + TABLE_USERS + " WHERE " + COL_ROLE + " = ?", new String[]{ROLE_ADMIN});
+        if (cursor.moveToFirst()) {
+            adminId = cursor.getInt(0);
+        }
+        cursor.close();
+        return adminId;
+    }
+
 
 
     /**
@@ -411,7 +552,7 @@ public class DatabaseHelper extends SQLiteOpenHelper {
 
 
     // Insert maintenance report
-    public boolean insertMaintenanceRequest(int userId, int roomId, String description, String dateReported) {
+    public boolean insertMaintenanceRequest(int userId, int roomId, String description, String dateReported, String pending) {
         SQLiteDatabase db = this.getWritableDatabase();
         ContentValues values = new ContentValues();
         values.put(COL_MAINTENANCE_USER_ID, userId);
@@ -419,10 +560,27 @@ public class DatabaseHelper extends SQLiteOpenHelper {
         values.put(COL_MAINTENANCE_DESC, description);
         values.put(COL_MAINTENANCE_DATE, dateReported);
         values.put(COL_MAINTENANCE_STATUS, "Pending");
+
         long result = db.insert(TABLE_MAINTENANCE, null, values);
+
+        if (result != -1) {
+            // Fetch user name for notification message
+            String userName = getUserNameById(userId);
+
+            // Fetch room number for notification message
+            String roomNumber = getRoomNumberById(roomId);
+
+            String message = "New maintenance request from " + userName + " for room " + roomNumber;
+            String timestamp = new java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(new java.util.Date());
+            int adminId = getAdminUserId(); // Ensure this method returns the admin user ID
+
+            insertNotification("maintenance", message, timestamp, adminId);
+        }
+
         db.close();
         return result != -1;
     }
+
 
     // Get all maintenance reports (for admin)
     public List<MaintenanceReport> getAllMaintenance() {
@@ -452,6 +610,42 @@ public class DatabaseHelper extends SQLiteOpenHelper {
         db.close();
         return list;
     }
+
+
+    public List<MaintenanceReport> getMaintenanceReportsByUserId(int tenantId) {
+        List<MaintenanceReport> reports = new ArrayList<>();
+        SQLiteDatabase db = this.getReadableDatabase();
+
+        String query = "SELECT m." + COL_MAINTENANCE_ID + ", m." + COL_MAINTENANCE_USER_ID + ", m." + COL_MAINTENANCE_ROOM_ID + ", " +
+                "m." + COL_MAINTENANCE_DESC + ", m." + COL_MAINTENANCE_STATUS + ", m." + COL_MAINTENANCE_DATE + ", " +
+                "r." + COL_ROOM_NUMBER +
+                " FROM " + TABLE_MAINTENANCE + " m" +
+                " LEFT JOIN " + TABLE_ROOMS + " r ON m." + COL_MAINTENANCE_ROOM_ID + " = r." + COL_ROOM_ID +
+                " WHERE m." + COL_MAINTENANCE_USER_ID + " = ?" +
+                " ORDER BY m." + COL_MAINTENANCE_DATE + " DESC";
+
+        Cursor cursor = db.rawQuery(query, new String[]{String.valueOf(tenantId)});
+
+        if (cursor != null && cursor.moveToFirst()) {
+            do {
+                MaintenanceReport report = new MaintenanceReport(
+                        cursor.getInt(cursor.getColumnIndexOrThrow(COL_MAINTENANCE_ID)),
+                        cursor.getInt(cursor.getColumnIndexOrThrow(COL_MAINTENANCE_USER_ID)),
+                        cursor.getInt(cursor.getColumnIndexOrThrow(COL_MAINTENANCE_ROOM_ID)),
+                        cursor.getString(cursor.getColumnIndexOrThrow(COL_MAINTENANCE_DESC)),
+                        cursor.getString(cursor.getColumnIndexOrThrow(COL_MAINTENANCE_STATUS)),
+                        cursor.getString(cursor.getColumnIndexOrThrow(COL_MAINTENANCE_DATE)),
+                        cursor.getString(cursor.getColumnIndexOrThrow(COL_ROOM_NUMBER))  // room number from join
+                );
+                reports.add(report);
+            } while (cursor.moveToNext());
+            cursor.close();
+        }
+
+        return reports;
+    }
+
+
 
     public boolean updateMaintenanceRequest(int requestId, String newDescription, String newStatus) {
         SQLiteDatabase db = this.getWritableDatabase();
@@ -692,6 +886,109 @@ public class DatabaseHelper extends SQLiteOpenHelper {
         db.close();
         return rows > 0;
     }
+
+    public User getUserById(int userId) {
+        User user = null;
+        SQLiteDatabase db = null;
+        Cursor cursor = null;
+
+        try {
+            db = this.getReadableDatabase();
+            cursor = db.query(
+                    TABLE_USERS,
+                    null,
+                    COL_ID + "=?",
+                    new String[]{String.valueOf(userId)},
+                    null, null, null);
+
+            if (cursor != null && cursor.moveToFirst()) {
+                int id = cursor.getInt(cursor.getColumnIndexOrThrow(COL_ID));
+                String name = cursor.getString(cursor.getColumnIndexOrThrow(COL_NAME));
+                String email = cursor.getString(cursor.getColumnIndexOrThrow(COL_EMAIL));
+
+                String phone = null;
+                int phoneIndex = cursor.getColumnIndex(COL_PHONE);
+                if (phoneIndex != -1) {
+                    phone = cursor.getString(phoneIndex);
+                }
+
+                String password = cursor.getString(cursor.getColumnIndexOrThrow(COL_PASSWORD));
+                String role = cursor.getString(cursor.getColumnIndexOrThrow(COL_ROLE));
+
+                user = new User(id, name, email, phone, password, role);
+
+                Log.d("DatabaseHelper", "User found: ID=" + id + ", Name=" + name);
+            } else {
+                Log.d("DatabaseHelper", "No user found with ID: " + userId);
+            }
+        } catch (Exception e) {
+            Log.e("DatabaseHelper", "Error retrieving user by ID", e);
+        } finally {
+            if (cursor != null) cursor.close();
+            // Do NOT close db here; managed by SQLiteOpenHelper
+        }
+
+        return user;
+    }
+
+    public boolean insertNotification(String type, String message, String timestamp, int targetUserId) {
+        SQLiteDatabase db = this.getWritableDatabase();
+        ContentValues values = new ContentValues();
+        values.put(COL_NOTIFICATION_TYPE, type);
+        values.put(COL_NOTIFICATION_MESSAGE, message);
+        values.put(COL_NOTIFICATION_TIMESTAMP, timestamp);
+        values.put(COL_NOTIFICATION_IS_READ, 0);
+        values.put(COL_NOTIFICATION_TARGET_USER_ID, targetUserId);
+        long result = db.insert(TABLE_NOTIFICATIONS, null, values);
+        // Do NOT close db here; managed by SQLiteOpenHelper
+        return result != -1;
+    }
+    public List<Notification> getNotificationsForAdmin(int adminUserId) {
+        List<Notification> notifications = new ArrayList<>();
+        SQLiteDatabase db = this.getReadableDatabase();
+
+        Cursor cursor = db.query(
+                TABLE_NOTIFICATIONS,
+                null,
+                COL_NOTIFICATION_TARGET_USER_ID + "=? OR " + COL_NOTIFICATION_TARGET_USER_ID + "=?",
+                new String[]{String.valueOf(adminUserId), "0"}, // 0 means broadcast to all admins
+                null,
+                null,
+                COL_NOTIFICATION_TIMESTAMP + " DESC"
+        );
+
+        if (cursor != null && cursor.moveToFirst()) {
+            do {
+                Notification notification = new Notification();
+                notification.setId(cursor.getInt(cursor.getColumnIndexOrThrow(COL_NOTIFICATION_ID)));
+                notification.setType(cursor.getString(cursor.getColumnIndexOrThrow(COL_NOTIFICATION_TYPE)));
+                notification.setMessage(cursor.getString(cursor.getColumnIndexOrThrow(COL_NOTIFICATION_MESSAGE)));
+                notification.setTimestamp(cursor.getString(cursor.getColumnIndexOrThrow(COL_NOTIFICATION_TIMESTAMP)));
+                notification.setRead(cursor.getInt(cursor.getColumnIndexOrThrow(COL_NOTIFICATION_IS_READ)) == 1);
+                notification.setTargetUserId(cursor.getInt(cursor.getColumnIndexOrThrow(COL_NOTIFICATION_TARGET_USER_ID)));
+                notifications.add(notification);
+            } while (cursor.moveToNext());
+            cursor.close();
+        }
+
+        return notifications;
+    }
+
+    // Add this method inside your DatabaseHelper class
+
+    public boolean markNotificationAsRead(int notificationId) {
+        SQLiteDatabase db = this.getWritableDatabase();
+        ContentValues values = new ContentValues();
+        values.put(COL_NOTIFICATION_IS_READ, 1); // Mark as read
+        int rowsAffected = db.update(TABLE_NOTIFICATIONS, values, COL_NOTIFICATION_ID + " = ?", new String[]{String.valueOf(notificationId)});
+        // Do NOT close db here if you have multiple operations pending
+        return rowsAffected > 0;
+    }
+
+
+
+
+
 
 
 }

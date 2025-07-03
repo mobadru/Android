@@ -1,6 +1,7 @@
 package com.example.semproject;
 
 import android.os.Bundle;
+import android.view.View;
 import android.widget.ArrayAdapter;
 import android.widget.Button;
 import android.widget.EditText;
@@ -12,7 +13,6 @@ import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
 import java.util.List;
-
 
 public class TenantManagementActivity extends AppCompatActivity {
 
@@ -27,61 +27,51 @@ public class TenantManagementActivity extends AppCompatActivity {
     UserAdapter adapter;
     List<User> userList;
 
-    /**
-     * onCreate() - Called when the activity is first created.
-     */
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        setContentView(R.layout.activity_tenant_management);  // Ensure this layout has the correct IDs
+        setContentView(R.layout.activity_tenant_management);
 
-        // Initialize database helper
         dbHelper = new DatabaseHelper(this);
 
-        // Link UI elements to XML layout
-        spinnerRole = findViewById(R.id.spinnerRole);  // Spinner for role selection
-        editName = findViewById(R.id.name);                  // EditText for name input
-        editEmail = findViewById(R.id.email);                // EditText for email input
-        editPassword = findViewById(R.id.password);          // EditText for password input
-        btnAddUser = findViewById(R.id.btnAddTenant);          // Button to trigger user addition
-        recyclerView = findViewById(R.id.recyclerViewUsers); // RecyclerView to show users
+        spinnerRole = findViewById(R.id.spinnerRole);
+        editName = findViewById(R.id.name);
+        editEmail = findViewById(R.id.email);
+        EditText editPhone = findViewById(R.id.editPhone);
+        editPassword = findViewById(R.id.password);
+        btnAddUser = findViewById(R.id.btnAddTenant);
+        recyclerView = findViewById(R.id.recyclerViewUsers);
 
         // Setup Spinner with user roles
         ArrayAdapter<String> spinnerAdapter = new ArrayAdapter<>(
                 this,
                 android.R.layout.simple_spinner_item,
-                new String[]{"Tenant", "Admin"}  // Roles
+                new String[]{"Tenant", "Admin"}
         );
         spinnerAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
         spinnerRole.setAdapter(spinnerAdapter);
 
-        // Setup RecyclerView
         recyclerView.setLayoutManager(new LinearLayoutManager(this));
-        loadUsers();  // Load user data into the RecyclerView
+        loadUsers();
 
-        // Handle Add User button click
         btnAddUser.setOnClickListener(v -> {
-            // Get values from form fields
             String name = editName.getText().toString().trim();
+            String phone = editPhone.getText().toString().trim();
             String email = editEmail.getText().toString().trim();
             String password = editPassword.getText().toString().trim();
             String role = spinnerRole.getSelectedItem().toString();
 
-            // Basic validation
             if (name.isEmpty() || email.isEmpty() || password.isEmpty()) {
                 Toast.makeText(this, "Please fill all fields", Toast.LENGTH_SHORT).show();
                 return;
             }
 
-            // Insert user to database
-            boolean inserted = dbHelper.insertUser(name, email, password, role);
+            boolean inserted = dbHelper.insertUser(name, phone, email, password, role);
             if (inserted) {
                 Toast.makeText(this, "User added successfully!", Toast.LENGTH_SHORT).show();
-                // Clear the input fields
                 editName.setText("");
                 editEmail.setText("");
                 editPassword.setText("");
-                // Reload users list
                 loadUsers();
             } else {
                 Toast.makeText(this, "Failed to add user (duplicate email?)", Toast.LENGTH_SHORT).show();
@@ -89,35 +79,75 @@ public class TenantManagementActivity extends AppCompatActivity {
         });
     }
 
-    /**
-     * loadUsers() - Loads all users from the database and displays them in RecyclerView.
-     */
     private void loadUsers() {
-        // Fetch all users from the database
         userList = dbHelper.getAllUsers();
 
-        // Setup adapter and attach listeners for edit/delete
         adapter = new UserAdapter(userList, new UserAdapter.OnUserActionListener() {
             @Override
             public void onEdit(User user) {
-                // TODO: Implement editing logic
-                Toast.makeText(TenantManagementActivity.this, "Edit user: " + user.getName(), Toast.LENGTH_SHORT).show();
+                showEditUserDialog(user);
             }
 
             @Override
             public void onDelete(User user) {
-                // Delete user from database
                 boolean deleted = dbHelper.deleteUser(user.getId());
                 if (deleted) {
                     Toast.makeText(TenantManagementActivity.this, "User deleted", Toast.LENGTH_SHORT).show();
-                    loadUsers(); // Reload list
+                    loadUsers();
                 } else {
                     Toast.makeText(TenantManagementActivity.this, "Failed to delete user", Toast.LENGTH_SHORT).show();
                 }
             }
         });
 
-        // Attach adapter to RecyclerView
         recyclerView.setAdapter(adapter);
+    }
+
+    private void showEditUserDialog(User user) {
+        View dialogView = getLayoutInflater().inflate(R.layout.dialog_edit_user, null);
+
+        EditText editName = dialogView.findViewById(R.id.editUserName);
+        EditText editPhone = dialogView.findViewById(R.id.editUserPhone);
+        EditText editEmail = dialogView.findViewById(R.id.editUserEmail);
+        EditText editPassword = dialogView.findViewById(R.id.editUserPassword);
+        Spinner spinnerRole = dialogView.findViewById(R.id.spinnerUserRole);
+
+        // Pre-fill fields
+        editName.setText(user.getName());
+        editPhone.setText(user.getPhone());
+        editEmail.setText(user.getEmail());
+        editPassword.setText(user.getPassword());
+
+        ArrayAdapter<String> spinnerAdapter = new ArrayAdapter<>(this, android.R.layout.simple_spinner_item, new String[]{"Tenant", "Admin"});
+        spinnerAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+        spinnerRole.setAdapter(spinnerAdapter);
+        spinnerRole.setSelection(user.getRole() != null && user.getRole().equalsIgnoreCase("Admin") ? 1 : 0);
+
+        new androidx.appcompat.app.AlertDialog.Builder(this)
+                .setTitle("Edit User")
+                .setView(dialogView)
+                .setPositiveButton("Save", (dialog, which) -> {
+                    String newName = editName.getText().toString().trim();
+                    String newPhone = editPhone.getText().toString().trim();
+                    String newEmail = editEmail.getText().toString().trim();
+                    String newPassword = editPassword.getText().toString().trim();
+                    String newRole = spinnerRole.getSelectedItem().toString();
+
+                    if (newName.isEmpty() || newEmail.isEmpty() || newPassword.isEmpty()) {
+                        Toast.makeText(this, "All fields are required", Toast.LENGTH_SHORT).show();
+                        return;
+                    }
+
+                    boolean updated = dbHelper.updateUser(user.getId(), newName, newEmail, newPassword, newPhone, newRole);
+
+                    if (updated) {
+                        Toast.makeText(this, "User updated!", Toast.LENGTH_SHORT).show();
+                        loadUsers();
+                    } else {
+                        Toast.makeText(this, "Failed to update user", Toast.LENGTH_SHORT).show();
+                    }
+                })
+                .setNegativeButton("Cancel", null)
+                .show();
     }
 }

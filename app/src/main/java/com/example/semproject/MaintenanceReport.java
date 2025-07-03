@@ -31,6 +31,17 @@ public class MaintenanceReport {
         // tenantName is not stored here but could be added as another field if needed
     }
 
+    public MaintenanceReport(int id, int tenantId, int roomId,
+                             String description, String status, String dateReported, String roomNumber) {
+        this.id = id;
+        this.tenantId = tenantId;
+        this.roomId = roomId;
+        this.description = description;
+        this.status = status;
+        this.dateReported = dateReported;
+        this.roomNumber = roomNumber;
+    }
+
     // Getters
     public int getId() {
         return id;

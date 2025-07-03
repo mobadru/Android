@@ -11,6 +11,12 @@
         android:theme="@style/Theme.SemProject"
         tools:targetApi="31">
         <activity
+            android:name=".activity_admin_notifications"
+            android:exported="false" />
+        <activity
+            android:name=".TenantProfile"
+            android:exported="false" />
+        <activity
             android:name=".TenantMessage"
             android:exported="false" />
         <activity

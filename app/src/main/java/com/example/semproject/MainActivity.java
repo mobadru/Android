@@ -74,7 +74,7 @@ public class MainActivity extends AppCompatActivity {
             }
         });
 
-        // 📥 Navigate to Register Activity
+
         registerButton.setOnClickListener(v -> {
             Intent intent = new Intent(MainActivity.this, Register.class);
             startActivity(intent);

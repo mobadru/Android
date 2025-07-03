@@ -99,8 +99,8 @@ public class activity_tenant_dashboard extends AppCompatActivity {
     }
     private void openProfile() {
         Toast.makeText(this, "Opening Profile...", Toast.LENGTH_SHORT).show();
-        // Intent intent = new Intent(this, ProfileActivity.class);
-        // intent.putExtra("tenantId", tenantId);
-        // startActivity(intent);
+         Intent intent = new Intent(this, TenantProfile.class);
+         intent.putExtra("tenantId", tenantId);
+         startActivity(intent);
     }
 }

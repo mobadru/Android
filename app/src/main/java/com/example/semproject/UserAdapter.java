@@ -26,18 +26,20 @@ public class UserAdapter extends RecyclerView.Adapter<UserAdapter.UserViewHolder
     }
 
     public static class UserViewHolder extends RecyclerView.ViewHolder {
-        TextView nameTextView, emailTextView, roleTextView;
+        TextView nameTextView, emailTextView, phoneTextView, roleTextView;
         Button editButton, deleteButton;
 
         public UserViewHolder(View itemView) {
             super(itemView);
             nameTextView = itemView.findViewById(R.id.userName);
             emailTextView = itemView.findViewById(R.id.userEmail);
+            phoneTextView = itemView.findViewById(R.id.userPhone); // <-- Add this line
             roleTextView = itemView.findViewById(R.id.userRole);
             editButton = itemView.findViewById(R.id.btnEditUser);
             deleteButton = itemView.findViewById(R.id.btnDeleteUser);
         }
     }
+
 
     @Override
     public UserViewHolder onCreateViewHolder(ViewGroup parent, int viewType) {
@@ -49,6 +51,7 @@ public class UserAdapter extends RecyclerView.Adapter<UserAdapter.UserViewHolder
     public void onBindViewHolder(UserViewHolder holder, int position) {
         User user = userList.get(position);
         holder.nameTextView.setText(user.getName());
+        holder.phoneTextView.setText(user.getPhone());
         holder.emailTextView.setText(user.getEmail());
         holder.roleTextView.setText(user.getRole());
 
